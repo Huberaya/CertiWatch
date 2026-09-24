@@ -1,0 +1,6 @@
+{
+  "name": "CertiWatch",
+  "description": "Plateforme SaaS B2B de monitoring continu de validité et conformité des certifications fournisseurs (GOTS, FSC, Ecocert, OEKO-TEX, Fairtrade).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
