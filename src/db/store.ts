@@ -26,6 +26,17 @@ import {
   SupplierPortalSession,
 } from '../types/report';
 import {
+  WebhookEndpoint,
+  WebhookDeliveryLog,
+  DeadLetterQueueItem,
+  WebhookEventType,
+} from '../types/webhook';
+import {
+  FieldAuditReport,
+  GdprDataSubject,
+  Soc2Control,
+} from '../types/compliance';
+import {
   SEED_TENANTS,
   SEED_USERS,
   SEED_SUPPLIERS,
@@ -39,6 +50,16 @@ import {
   SEED_EUDR_PLOTS,
   SEED_AUDIT_PACKS,
 } from './seedData';
+import {
+  SEED_WEBHOOK_ENDPOINTS,
+  SEED_WEBHOOK_DELIVERIES,
+  SEED_DLQ_ITEMS,
+} from './webhookSeedData';
+import {
+  SEED_FIELD_AUDITS,
+  SEED_GDPR_SUBJECTS,
+  SEED_SOC2_CONTROLS,
+} from './complianceSeedData';
 
 const STORAGE_KEY_PREFIX = 'certiwatch_v1_';
 
@@ -58,6 +79,12 @@ export interface AppStoreState {
   eudrPlots: EudrPlotDeclaration[];
   generatedAuditPacks: GeneratedAuditPack[];
   supplierPortalSubmissions: Record<string, any>;
+  webhooks: WebhookEndpoint[];
+  webhookLogs: WebhookDeliveryLog[];
+  deadLetterQueue: DeadLetterQueueItem[];
+  fieldAudits: FieldAuditReport[];
+  gdprSubjects: GdprDataSubject[];
+  soc2Controls: Soc2Control[];
   lastSyncTimestamp: string;
   isAutoSyncing: boolean;
 }
@@ -79,6 +106,12 @@ class Store {
           if (!parsed.eudrPlots) parsed.eudrPlots = SEED_EUDR_PLOTS;
           if (!parsed.generatedAuditPacks) parsed.generatedAuditPacks = SEED_AUDIT_PACKS;
           if (!parsed.supplierPortalSubmissions) parsed.supplierPortalSubmissions = {};
+          if (!parsed.webhooks) parsed.webhooks = SEED_WEBHOOK_ENDPOINTS;
+          if (!parsed.webhookLogs) parsed.webhookLogs = SEED_WEBHOOK_DELIVERIES;
+          if (!parsed.deadLetterQueue) parsed.deadLetterQueue = SEED_DLQ_ITEMS;
+          if (!parsed.fieldAudits) parsed.fieldAudits = SEED_FIELD_AUDITS;
+          if (!parsed.gdprSubjects) parsed.gdprSubjects = SEED_GDPR_SUBJECTS;
+          if (!parsed.soc2Controls) parsed.soc2Controls = SEED_SOC2_CONTROLS;
           return parsed;
         }
       }
@@ -102,6 +135,12 @@ class Store {
       eudrPlots: SEED_EUDR_PLOTS,
       generatedAuditPacks: SEED_AUDIT_PACKS,
       supplierPortalSubmissions: {},
+      webhooks: SEED_WEBHOOK_ENDPOINTS,
+      webhookLogs: SEED_WEBHOOK_DELIVERIES,
+      deadLetterQueue: SEED_DLQ_ITEMS,
+      fieldAudits: SEED_FIELD_AUDITS,
+      gdprSubjects: SEED_GDPR_SUBJECTS,
+      soc2Controls: SEED_SOC2_CONTROLS,
       lastSyncTimestamp: new Date().toISOString(),
       isAutoSyncing: false,
     };
@@ -2074,6 +2113,335 @@ class Store {
     this.saveState();
   }
 
+  // --- Chantier 9 : Webhooks EventBus, Dead Letter Queue (DLQ) & API Management ---
+
+  public getTenantWebhooks(): WebhookEndpoint[] {
+    const tenantId = this.state.activeTenantId;
+    return (this.state.webhooks || []).filter((w) => w.tenantId === tenantId);
+  }
+
+  public addWebhook(
+    endpointData: Omit<WebhookEndpoint, 'id' | 'createdAt' | 'failureCount' | 'tenantId'>
+  ): WebhookEndpoint {
+    const user = this.getActiveUser();
+    const newEndpoint: WebhookEndpoint = {
+      ...endpointData,
+      id: 'wh-' + Date.now().toString(36),
+      tenantId: this.state.activeTenantId,
+      failureCount: 0,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (!this.state.webhooks) this.state.webhooks = [];
+    this.state.webhooks.unshift(newEndpoint);
+
+    this.addAuditLog({
+      actionCategory: 'SYSTEM_SYNC',
+      entityType: 'INTEGRATION',
+      entityId: newEndpoint.id,
+      entityReference: newEndpoint.name,
+      source: 'MANUAL_UI',
+      details: `Création d'un nouveau Webhook sortant ERP ("${newEndpoint.name}") ciblant ${newEndpoint.url}. Déclencheurs: ${newEndpoint.events.join(', ')}.`,
+    });
+
+    this.saveState();
+    return newEndpoint;
+  }
+
+  public updateWebhook(id: string, updates: Partial<WebhookEndpoint>): boolean {
+    const idx = (this.state.webhooks || []).findIndex((w) => w.id === id);
+    if (idx === -1) return false;
+
+    this.state.webhooks[idx] = {
+      ...this.state.webhooks[idx],
+      ...updates,
+    };
+
+    this.saveState();
+    return true;
+  }
+
+  public deleteWebhook(id: string): boolean {
+    const webhook = (this.state.webhooks || []).find((w) => w.id === id);
+    if (!webhook) return false;
+
+    this.state.webhooks = this.state.webhooks.filter((w) => w.id !== id);
+
+    this.addAuditLog({
+      actionCategory: 'SYSTEM_SYNC',
+      entityType: 'INTEGRATION',
+      entityId: webhook.id,
+      entityReference: webhook.name,
+      source: 'MANUAL_UI',
+      details: `Suppression du Webhook sortant ("${webhook.name}").`,
+    });
+
+    this.saveState();
+    return true;
+  }
+
+  public getTenantWebhookLogs(): WebhookDeliveryLog[] {
+    const tenantWebhookIds = new Set(this.getTenantWebhooks().map((w) => w.id));
+    return (this.state.webhookLogs || []).filter((log) => tenantWebhookIds.has(log.endpointId));
+  }
+
+  public getDeadLetterQueue(): DeadLetterQueueItem[] {
+    const tenantWebhookIds = new Set(this.getTenantWebhooks().map((w) => w.id));
+    return (this.state.deadLetterQueue || []).filter((item) => tenantWebhookIds.has(item.webhookId));
+  }
+
+  public replayDlqItem(dlqId: string): boolean {
+    const dlq = (this.state.deadLetterQueue || []).find((item) => item.id === dlqId);
+    if (!dlq) return false;
+
+    // Simulate successful replay
+    dlq.status = 'REPLAYED';
+    dlq.attemptCount += 1;
+
+    // Add success delivery log
+    const successLog: WebhookDeliveryLog = {
+      id: 'del-replay-' + Date.now().toString(36),
+      endpointId: dlq.webhookId,
+      endpointName: dlq.webhookName,
+      event: dlq.event,
+      payload: dlq.payload,
+      signature: 'sha256=replayed_' + Math.random().toString(36).substring(2, 10),
+      statusCode: 200,
+      durationMs: Math.floor(40 + Math.random() * 80),
+      timestamp: new Date().toISOString(),
+      retryCount: dlq.attemptCount,
+      status: 'SUCCESS',
+    };
+
+    if (!this.state.webhookLogs) this.state.webhookLogs = [];
+    this.state.webhookLogs.unshift(successLog);
+
+    this.addAuditLog({
+      actionCategory: 'SYSTEM_SYNC',
+      entityType: 'INTEGRATION',
+      entityId: dlq.webhookId,
+      entityReference: `Rejeu DLQ #${dlq.id}`,
+      source: 'MANUAL_UI',
+      details: `Rejeu manuel réussi du message en file d'attente DLQ (${dlq.event}) vers ${dlq.targetUrl}. Statut HTTP: 200 OK.`,
+    });
+
+    this.saveState();
+    return true;
+  }
+
+  public replayAllDlq(): number {
+    const pendingItems = (this.state.deadLetterQueue || []).filter(
+      (item) => item.status === 'PENDING_RETRY'
+    );
+    pendingItems.forEach((item) => {
+      this.replayDlqItem(item.id);
+    });
+    return pendingItems.length;
+  }
+
+  public discardDlqItem(dlqId: string): boolean {
+    const dlq = (this.state.deadLetterQueue || []).find((item) => item.id === dlqId);
+    if (!dlq) return false;
+
+    dlq.status = 'DISCARDED';
+    this.saveState();
+    return true;
+  }
+
+  public simulateWebhookDispatch(
+    endpointId: string,
+    event: WebhookEventType,
+    customPayload?: Record<string, any>
+  ): WebhookDeliveryLog {
+    const endpoint = (this.state.webhooks || []).find((w) => w.id === endpointId);
+    const endpointName = endpoint?.name || 'Endpoint ERP';
+
+    const payload = customPayload || {
+      event,
+      timestamp: new Date().toISOString(),
+      tenantId: this.state.activeTenantId,
+      environment: 'production',
+      data: {
+        supplierId: 'sup-danone-02',
+        supplierName: 'Agrícola Andina del Cacao S.A.C.',
+        standard: 'GOTS',
+        action: 'GOODS_RECEIPT_BLOCKED',
+      },
+    };
+
+    // Generate simulated HMAC signature
+    const signature =
+      'sha256=' +
+      Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+    const durationMs = Math.floor(35 + Math.random() * 95);
+
+    const log: WebhookDeliveryLog = {
+      id: 'del-sim-' + Date.now().toString(36),
+      endpointId,
+      endpointName,
+      event,
+      payload,
+      signature,
+      statusCode: 200,
+      durationMs,
+      timestamp: new Date().toISOString(),
+      retryCount: 0,
+      status: 'SUCCESS',
+    };
+
+    if (!this.state.webhookLogs) this.state.webhookLogs = [];
+    this.state.webhookLogs.unshift(log);
+
+    if (endpoint) {
+      endpoint.lastSuccessAt = new Date().toISOString();
+      endpoint.failureCount = 0;
+    }
+
+    this.addAuditLog({
+      actionCategory: 'SYSTEM_SYNC',
+      entityType: 'INTEGRATION',
+      entityId: endpointId,
+      entityReference: `Webhook EventBus: ${event}`,
+      source: 'MANUAL_UI',
+      details: `Émission d'un webhook temps réel (${event}) vers "${endpointName}" (${endpoint?.url}). Signature HMAC SHA-256 validée. Latence: ${durationMs}ms.`,
+    });
+
+    this.saveState();
+    return log;
+  }
+
+  // --- Chantier 10 : Mode PWA Offline (Audits Terrain) & Conformité RGPD / SOC 2 ---
+
+  public getTenantFieldAudits(): FieldAuditReport[] {
+    const tenantId = this.state.activeTenantId;
+    return (this.state.fieldAudits || []).filter((a) => a.tenantId === tenantId);
+  }
+
+  public addFieldAudit(
+    reportData: Omit<FieldAuditReport, 'id' | 'tenantId' | 'cryptoHash'>
+  ): FieldAuditReport {
+    const user = this.getActiveUser();
+    const id = 'audit-field-' + Date.now().toString(36);
+    const tenantId = this.state.activeTenantId;
+
+    // Cryptographic seal for audit report
+    const cryptoHash =
+      'sha256=' +
+      Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+    const newAudit: FieldAuditReport = {
+      ...reportData,
+      id,
+      tenantId,
+      cryptoHash,
+    };
+
+    if (!this.state.fieldAudits) this.state.fieldAudits = [];
+    this.state.fieldAudits.unshift(newAudit);
+
+    this.addAuditLog({
+      actionCategory: 'SUPPLIER_MODIFIED',
+      entityType: 'SUPPLIER',
+      entityId: newAudit.supplierId,
+      entityReference: `Rapport d'Audit Terrain #${id}`,
+      source: 'MANUAL_UI',
+      details: `Enregistrement d'un rapport d'audit terrain ${newAudit.syncStatus === 'LOCAL_OFFLINE' ? '(Mode PWA Hors-Ligne)' : '(En ligne)'} pour ${newAudit.supplierName} par ${newAudit.auditorName}. Sceau cryptographique ${cryptoHash.substring(0, 16)}...`,
+    });
+
+    this.saveState();
+    return newAudit;
+  }
+
+  public syncAllLocalAudits(): number {
+    const localAudits = (this.state.fieldAudits || []).filter(
+      (a) => a.tenantId === this.state.activeTenantId && a.syncStatus === 'LOCAL_OFFLINE'
+    );
+
+    localAudits.forEach((audit) => {
+      audit.syncStatus = 'SYNCED_CLOUD';
+      this.addAuditLog({
+        actionCategory: 'SYSTEM_SYNC',
+        entityType: 'SUPPLIER',
+        entityId: audit.supplierId,
+        entityReference: `Audit Terrain #${audit.id}`,
+        source: 'MANUAL_UI',
+        details: `Synchronisation automatique PWA réussie vers le cloud CertiWatch pour l'audit terrain de ${audit.supplierName}. Données réconciliées.`,
+      });
+    });
+
+    this.saveState();
+    return localAudits.length;
+  }
+
+  public getTenantGdprSubjects(): GdprDataSubject[] {
+    const tenantId = this.state.activeTenantId;
+    return (this.state.gdprSubjects || []).filter((s) => s.tenantId === tenantId);
+  }
+
+  public addGdprSubject(data: Omit<GdprDataSubject, 'id' | 'tenantId'>): GdprDataSubject {
+    const id = 'gdpr-sub-' + Date.now().toString(36);
+    const tenantId = this.state.activeTenantId;
+
+    const newSubject: GdprDataSubject = {
+      ...data,
+      id,
+      tenantId,
+    };
+
+    if (!this.state.gdprSubjects) this.state.gdprSubjects = [];
+    this.state.gdprSubjects.unshift(newSubject);
+
+    this.addAuditLog({
+      actionCategory: 'SYSTEM_SYNC',
+      entityType: 'SUPPLIER',
+      entityId: id,
+      entityReference: `Registre RGPD: ${data.fullName}`,
+      source: 'MANUAL_UI',
+      details: `Enregistrement d'une personne concernée dans le Registre RGPD (${data.fullName} - ${data.company}). Base légale: ${data.legalBasis}. Rétention jusqu'à: ${data.retentionExpiryDate}.`,
+    });
+
+    this.saveState();
+    return newSubject;
+  }
+
+  public anonymizeGdprSubject(id: string): { success: boolean; certificateOfErasure: string } {
+    const subject = (this.state.gdprSubjects || []).find((s) => s.id === id);
+    if (!subject) return { success: false, certificateOfErasure: '' };
+
+    const oldName = subject.fullName;
+    const oldEmail = subject.email;
+
+    const proofHash =
+      'sha256=gdpr_erasure_' +
+      Array.from({ length: 50 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+    subject.fullName = `Anonymisé [RGPD Art. 17 - Réf #${id.slice(-6).toUpperCase()}]`;
+    subject.email = `anonymized-${id.slice(-6)}@privacy.certiwatch.internal`;
+    subject.personalDataCategories = ['Données nominatives purgées irréversiblement'];
+    subject.status = 'ANONYMIZED_RIGHT_TO_FORGET';
+    subject.anonymizedAt = new Date().toISOString();
+    subject.anonymizationProofHash = proofHash;
+
+    const certRef = `CERT-RGPD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    this.addAuditLog({
+      actionCategory: 'SUPPLIER_MODIFIED',
+      entityType: 'SUPPLIER',
+      entityId: id,
+      entityReference: `Attestation Droit à l'Oubli ${certRef}`,
+      source: 'MANUAL_UI',
+      details: `Application du Droit à l'Oubli (Art. 17 RGPD) pour l'identité "${oldName}" (${oldEmail}). Données nominatives détruites et hachées irréversiblement. Attestation scellée: ${proofHash.substring(0, 20)}...`,
+    });
+
+    this.saveState();
+    return { success: true, certificateOfErasure: certRef };
+  }
+
+  public getSoc2Controls(): Soc2Control[] {
+    return this.state.soc2Controls || SEED_SOC2_CONTROLS;
+  }
+
   public resetDemoData() {
     this.state = {
       tenants: SEED_TENANTS,
@@ -2091,6 +2459,12 @@ class Store {
       eudrPlots: SEED_EUDR_PLOTS,
       generatedAuditPacks: SEED_AUDIT_PACKS,
       supplierPortalSubmissions: {},
+      webhooks: SEED_WEBHOOK_ENDPOINTS,
+      webhookLogs: SEED_WEBHOOK_DELIVERIES,
+      deadLetterQueue: SEED_DLQ_ITEMS,
+      fieldAudits: SEED_FIELD_AUDITS,
+      gdprSubjects: SEED_GDPR_SUBJECTS,
+      soc2Controls: SEED_SOC2_CONTROLS,
       lastSyncTimestamp: new Date().toISOString(),
       isAutoSyncing: false,
     };

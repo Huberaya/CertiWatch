@@ -13,6 +13,8 @@ import {
   RefreshCw,
   ExternalLink,
   Award,
+  Bot,
+  Smartphone,
 } from 'lucide-react';
 import { appStore } from '../../db/store';
 
@@ -26,6 +28,8 @@ export type NavigationTab =
   | 'integrations'
   | 'audit'
   | 'reports'
+  | 'copilot'
+  | 'compliance'
   | 'settings';
 
 interface SidebarProps {
@@ -103,6 +107,18 @@ export function Sidebar({
       label: 'Rapports & CSRD',
       icon: Award,
       description: 'EUDR & Packs CAC',
+    },
+    {
+      id: 'copilot' as NavigationTab,
+      label: 'Copilot IA & Décision',
+      icon: Bot,
+      description: 'Substitution & Clauses',
+    },
+    {
+      id: 'compliance' as NavigationTab,
+      label: 'PWA, RGPD & SOC 2',
+      icon: Smartphone,
+      description: 'Audits terrain & Sécurité',
     },
     {
       id: 'settings' as NavigationTab,

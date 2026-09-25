@@ -11,7 +11,10 @@ import { MatrixView } from './components/views/MatrixView';
 import { IntegrationsView } from './components/views/IntegrationsView';
 import { AuditTrailView } from './components/views/AuditTrailView';
 import { ReportsView } from './components/views/ReportsView';
+import { CopilotView } from './components/views/CopilotView';
+import { ComplianceSecurityView } from './components/views/ComplianceSecurityView';
 import { SettingsView } from './components/views/SettingsView';
+import { OfflineIndicator } from './components/pwa/OfflineIndicator';
 
 export default function App() {
   const [, setTick] = useState(0);
@@ -48,6 +51,8 @@ export default function App() {
     integrations: 'Intégrations ERP & Blocage Commandes',
     audit: 'Journal d’Audit Trail',
     reports: 'Rapports Réglementaires CSRD, Conformité EUDR & Packs d’Audit',
+    copilot: 'Copilot d’IA Décisionnelle & Intelligence Achats',
+    compliance: 'Mode PWA Déconnecté, RGPD & Sécurité SOC 2 Type II',
     settings: 'Paramètres & Quotas Multi-Tenant',
   };
 
@@ -134,10 +139,18 @@ export default function App() {
 
             {activeTab === 'reports' && <ReportsView />}
 
+            {activeTab === 'copilot' && (
+              <CopilotView onNavigateTab={(tab) => setActiveTab(tab)} />
+            )}
+
+            {activeTab === 'compliance' && <ComplianceSecurityView />}
+
             {activeTab === 'settings' && <SettingsView />}
           </div>
         </main>
       </div>
+
+      <OfflineIndicator />
     </div>
   );
 }

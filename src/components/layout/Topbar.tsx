@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { appStore } from '../../db/store';
 import { UserRole } from '../../types/tenant';
+import { PWAInstallButton } from '../pwa/PWAInstallButton';
 
 interface TopbarProps {
   currentTabName: string;
@@ -156,6 +157,9 @@ export function Topbar({
             </div>
           )}
         </div>
+
+        {/* PWA Install Button */}
+        <PWAInstallButton />
 
         {/* User preview */}
         <div className="flex items-center gap-2 pl-2 border-l border-slate-800 text-xs">
