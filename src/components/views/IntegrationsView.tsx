@@ -19,42 +19,29 @@ export function IntegrationsView({ suppliers, certificates }: IntegrationsViewPr
   const handleSimulateErpCheck = (e: React.FormEvent) => {
     e.preventDefault();
     const supplier = suppliers.find((s) => s.id === simSupplierId) || suppliers[0];
-    const suppCerts = certificates.filter((c) => c.supplierId === supplier.id);
+    if (!supplier) return;
 
-    const revokedOrSuspended = suppCerts.find((c) =>
-      ['REVOKED', 'SUSPENDED', 'EXPIRED'].includes(c.status)
-    );
+    const evaluation = appStore.evaluateOrderCompliance({
+      supplierId: supplier.id,
+      productCategory: simCategory,
+      amountEur: Number(simPoAmount) || 0,
+      logAudit: true,
+    });
 
-    const validCert = suppCerts.find((c) => c.status === 'VALID');
-
-    if (revokedOrSuspended) {
-      setSimResult({
-        decision: 'BLOCKED',
-        code: 'ERR_COMPLIANCE_HARD_BLOCK',
-        status: 403,
-        reason: `Certificat ${revokedOrSuspended.standardLabel} N° ${revokedOrSuspended.certificateNumber} est ${revokedOrSuspended.status}. Sanction ou péremption active.`,
-        actionTaken: 'COMMANDE D’ACHAT REJETÉE AUTOMATIQUEMENT DANS L’ERP (SAP/Coupa/Ivalua)',
-        supplierStatus: supplier.status,
-      });
-    } else if (!validCert) {
-      setSimResult({
-        decision: 'BLOCKED',
-        code: 'ERR_NO_VALID_CERTIFICATE',
-        status: 403,
-        reason: `Aucun certificat actif trouvé pour la catégorie demandée "${simCategory}".`,
-        actionTaken: 'COMMANDE SUSPENDUE EN ATTENTE DE CERTIFICAT VALIDE',
-        supplierStatus: supplier.status,
-      });
-    } else {
-      setSimResult({
-        decision: 'AUTHORIZED',
-        code: 'OK_COMPLIANT',
-        status: 200,
-        reason: `Certificat ${validCert.standardLabel} N° ${validCert.certificateNumber} valide jusqu’au ${validCert.expiryDate}. Concordance registre 100%.`,
-        actionTaken: 'COMMANDE APPROUVÉE ET TRANSMISIBLE AU FOURNISSEUR',
-        supplierStatus: supplier.status,
-      });
-    }
+    setSimResult({
+      decision: evaluation.decision,
+      code: evaluation.decision === 'ALLOWED' ? 'OK_COMPLIANT' : 'ERR_COMPLIANCE_HARD_BLOCK',
+      status: evaluation.decision === 'ALLOWED' ? 200 : 403,
+      reason: evaluation.reasons.join(' | '),
+      actionTaken:
+        evaluation.decision === 'ALLOWED'
+          ? 'COMMANDE D’ACHAT APPROUVÉE DANS L’ERP (SAP/Coupa)'
+          : evaluation.decision === 'REQUIRES_APPROVAL'
+          ? 'COMMANDE EN SUSPENS - DÉROGATION QUALITÉ REQUISE'
+          : 'COMMANDE D’ACHAT REJETÉE AUTOMATIQUEMENT DANS L’ERP (SAP/Coupa/Ivalua)',
+      supplierStatus: supplier.status,
+      missingStandards: evaluation.missingStandards,
+    });
   };
 
   return (

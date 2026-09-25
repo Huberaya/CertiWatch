@@ -10,6 +10,7 @@ import { ConnectorsView } from './components/views/ConnectorsView';
 import { MatrixView } from './components/views/MatrixView';
 import { IntegrationsView } from './components/views/IntegrationsView';
 import { AuditTrailView } from './components/views/AuditTrailView';
+import { ReportsView } from './components/views/ReportsView';
 import { SettingsView } from './components/views/SettingsView';
 
 export default function App() {
@@ -46,6 +47,7 @@ export default function App() {
     matrix: 'Matrice de Conformité Achats',
     integrations: 'Intégrations ERP & Blocage Commandes',
     audit: 'Journal d’Audit Trail',
+    reports: 'Rapports Réglementaires CSRD, Conformité EUDR & Packs d’Audit',
     settings: 'Paramètres & Quotas Multi-Tenant',
   };
 
@@ -129,6 +131,8 @@ export default function App() {
             {activeTab === 'audit' && (
               <AuditTrailView logs={auditLogs} searchQuery={searchQuery} />
             )}
+
+            {activeTab === 'reports' && <ReportsView />}
 
             {activeTab === 'settings' && <SettingsView />}
           </div>

@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   RefreshCw,
   ExternalLink,
+  Award,
 } from 'lucide-react';
 import { appStore } from '../../db/store';
 
@@ -24,6 +25,7 @@ export type NavigationTab =
   | 'matrix'
   | 'integrations'
   | 'audit'
+  | 'reports'
   | 'settings';
 
 interface SidebarProps {
@@ -95,6 +97,12 @@ export function Sidebar({
       label: 'Audit Trail',
       icon: History,
       description: 'Traçabilité immuable',
+    },
+    {
+      id: 'reports' as NavigationTab,
+      label: 'Rapports & CSRD',
+      icon: Award,
+      description: 'EUDR & Packs CAC',
     },
     {
       id: 'settings' as NavigationTab,

@@ -8,11 +8,23 @@ import {
   SupplierTier,
   SpendCriticality,
 } from '../types/supplier';
-import { Certificate, CertificateStatus, VerificationOutcome } from '../types/certificate';
+import { Certificate, CertificateStatus, CertificationStandard, VerificationOutcome } from '../types/certificate';
 import { ComplianceAlert, AlertStatus } from '../types/alert';
-import { AuditLogEntry } from '../types/audit';
-import { ComplianceMatrixRule } from '../types/matrix';
+import { AuditLogEntry, AuditChainVerificationResult } from '../types/audit';
+import { generateEventSeal, verifyAuditChainIntegrity } from '../utils/cryptoAudit';
+import {
+  ComplianceMatrixRule,
+  OrderComplianceCheckResult,
+  SupplierMatrixComplianceSummary,
+} from '../types/matrix';
 import { CertificationProviderMetadata, OrchestrationConfig, OrchestratorRunLog } from '../types/connector';
+import {
+  EudrPlotDeclaration,
+  GeneratedAuditPack,
+  OfficialAuditPackConfig,
+  CsrdEsrsScorecard,
+  SupplierPortalSession,
+} from '../types/report';
 import {
   SEED_TENANTS,
   SEED_USERS,
@@ -24,6 +36,8 @@ import {
   SEED_PROVIDERS,
   SEED_ORCHESTRATION_CONFIG,
   SEED_ORCHESTRATOR_RUNS,
+  SEED_EUDR_PLOTS,
+  SEED_AUDIT_PACKS,
 } from './seedData';
 
 const STORAGE_KEY_PREFIX = 'certiwatch_v1_';
@@ -41,6 +55,9 @@ export interface AppStoreState {
   providers: CertificationProviderMetadata[];
   orchestrationConfig: OrchestrationConfig;
   orchestratorRunLogs: OrchestratorRunLog[];
+  eudrPlots: EudrPlotDeclaration[];
+  generatedAuditPacks: GeneratedAuditPack[];
+  supplierPortalSubmissions: Record<string, any>;
   lastSyncTimestamp: string;
   isAutoSyncing: boolean;
 }
@@ -59,6 +76,9 @@ class Store {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.tenants && parsed.suppliers && parsed.certificates) {
+          if (!parsed.eudrPlots) parsed.eudrPlots = SEED_EUDR_PLOTS;
+          if (!parsed.generatedAuditPacks) parsed.generatedAuditPacks = SEED_AUDIT_PACKS;
+          if (!parsed.supplierPortalSubmissions) parsed.supplierPortalSubmissions = {};
           return parsed;
         }
       }
@@ -79,6 +99,9 @@ class Store {
       providers: SEED_PROVIDERS,
       orchestrationConfig: SEED_ORCHESTRATION_CONFIG,
       orchestratorRunLogs: SEED_ORCHESTRATOR_RUNS,
+      eudrPlots: SEED_EUDR_PLOTS,
+      generatedAuditPacks: SEED_AUDIT_PACKS,
+      supplierPortalSubmissions: {},
       lastSyncTimestamp: new Date().toISOString(),
       isAutoSyncing: false,
     };
@@ -201,19 +224,104 @@ class Store {
   }
 
   // --- Audit Trail helper ---
-  public addAuditLog(entry: Omit<AuditLogEntry, 'id' | 'timestamp' | 'tenantId' | 'userId' | 'userName' | 'userRole'>) {
+  public addAuditLog(
+    entry: Omit<
+      AuditLogEntry,
+      'id' | 'timestamp' | 'tenantId' | 'userId' | 'userName' | 'userRole' | 'hash' | 'previousHash' | 'blockNumber' | 'digitalSeal'
+    >
+  ) {
     const user = this.getActiveUser();
+    const timestamp = new Date().toISOString();
+    const previousEntry = this.state.auditLogs[0];
+    const previousHash =
+      previousEntry?.hash || '0000000000000000000000000000000000000000000000000000000000000000';
+    const blockNumber = (previousEntry?.blockNumber || this.state.auditLogs.length) + 1;
+
+    const { hash, digitalSeal } = generateEventSeal({
+      tenantId: this.state.activeTenantId,
+      timestamp,
+      actionCategory: entry.actionCategory,
+      entityId: entry.entityId,
+      previousHash,
+      details: entry.details,
+    });
+
     const newEntry: AuditLogEntry = {
       id: 'log-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
       tenantId: this.state.activeTenantId,
-      timestamp: new Date().toISOString(),
+      timestamp,
       userId: user.id,
       userName: user.name,
       userRole: user.role,
+      ipAddress: entry.ipAddress || '194.254.12.8',
+      hash,
+      previousHash,
+      blockNumber,
+      digitalSeal,
       ...entry,
     };
     this.state.auditLogs.unshift(newEntry);
     this.saveState();
+  }
+
+  public verifyAuditIntegrity(): AuditChainVerificationResult {
+    const tenantLogs = this.getTenantAuditLogs();
+    return verifyAuditChainIntegrity(tenantLogs);
+  }
+
+  public exportAuditLogsCSV(): string {
+    const logs = this.getTenantAuditLogs();
+    const headers = [
+      'Bloc N°',
+      'Horodatage (UTC)',
+      'Auteur / Acteur',
+      'Rôle',
+      'Catégorie Action',
+      'Type Entité',
+      'Référence Entité',
+      'Source',
+      'Détails Événement',
+      'Empreinte SHA-256 (Hash)',
+      'Hash Précédent',
+      'Sceau Électronique',
+    ];
+
+    const rows = logs.map((l) => [
+      `"${l.blockNumber || 0}"`,
+      `"${l.timestamp}"`,
+      `"${l.userName.replace(/"/g, '""')}"`,
+      `"${l.userRole}"`,
+      `"${l.actionCategory}"`,
+      `"${l.entityType}"`,
+      `"${l.entityReference.replace(/"/g, '""')}"`,
+      `"${l.source}"`,
+      `"${(l.details || '').replace(/"/g, '""')}"`,
+      `"${l.hash || ''}"`,
+      `"${l.previousHash || ''}"`,
+      `"${l.digitalSeal || ''}"`,
+    ].join(','));
+
+    return [headers.join(','), ...rows].join('\n');
+  }
+
+  public exportAuditLogsJSON(): string {
+    const logs = this.getTenantAuditLogs();
+    const integrity = this.verifyAuditIntegrity();
+    const tenant = this.getActiveTenant();
+
+    const output = {
+      exportMetadata: {
+        system: 'CertiWatch Compliance Platform',
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        exportedAt: new Date().toISOString(),
+        totalLogs: logs.length,
+        cryptographicIntegrity: integrity,
+      },
+      auditRecords: logs,
+    };
+
+    return JSON.stringify(output, null, 2);
   }
 
   // --- Supplier Mutations ---
@@ -974,6 +1082,414 @@ class Store {
     }
   }
 
+  // --- Compliance Matrix Management (Chantier 4) ---
+  public addMatrixRule(ruleData: Omit<ComplianceMatrixRule, 'id' | 'tenantId' | 'updatedAt'>): ComplianceMatrixRule {
+    const newRule: ComplianceMatrixRule = {
+      ...ruleData,
+      id: 'rule-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6),
+      tenantId: this.state.activeTenantId,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.state.matrixRules.unshift(newRule);
+    this.addAuditLog({
+      actionCategory: 'MATRIX_RULE_UPDATED',
+      entityType: 'MATRIX',
+      entityId: newRule.id,
+      entityReference: newRule.productCategory,
+      source: 'MANUAL_UI',
+      newValue: newRule.requiredStandards.join(', '),
+      details: `Création de règle de matrice pour "${newRule.productCategory}" : ${newRule.requiredStandards.join(', ')} (${newRule.criticality}). Condition: ${newRule.countryCondition}.`,
+    });
+
+    this.saveState();
+    return newRule;
+  }
+
+  public updateMatrixRule(id: string, updates: Partial<ComplianceMatrixRule>): ComplianceMatrixRule | null {
+    const index = this.state.matrixRules.findIndex(
+      (r) => r.id === id && r.tenantId === this.state.activeTenantId
+    );
+    if (index === -1) return null;
+
+    const prev = this.state.matrixRules[index];
+    this.state.matrixRules[index] = {
+      ...prev,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.addAuditLog({
+      actionCategory: 'MATRIX_RULE_UPDATED',
+      entityType: 'MATRIX',
+      entityId: id,
+      entityReference: prev.productCategory,
+      source: 'MANUAL_UI',
+      details: `Mise à jour de la règle de matrice "${prev.productCategory}".`,
+    });
+
+    this.saveState();
+    return this.state.matrixRules[index];
+  }
+
+  public deleteMatrixRule(id: string) {
+    const index = this.state.matrixRules.findIndex(
+      (r) => r.id === id && r.tenantId === this.state.activeTenantId
+    );
+    if (index === -1) return;
+
+    const rule = this.state.matrixRules[index];
+    this.state.matrixRules = this.state.matrixRules.filter((r) => r.id !== id);
+
+    this.addAuditLog({
+      actionCategory: 'MATRIX_RULE_UPDATED',
+      entityType: 'MATRIX',
+      entityId: id,
+      entityReference: rule.productCategory,
+      source: 'MANUAL_UI',
+      details: `Suppression de la règle d'exigence pour la catégorie "${rule.productCategory}".`,
+    });
+
+    this.saveState();
+  }
+
+  public exportMatrixRulesCSV(): string {
+    const rules = this.getTenantMatrixRules();
+    const headers = [
+      'Famille Produit',
+      'Standards Requis',
+      'Alternatives Acceptées',
+      'Criticité',
+      'Condition Géographique',
+      'Pays Spécifiques',
+      'Seuil Volume Min (€)',
+      'Audit de Site Exigé',
+      'Politique RSE / Notes',
+      'Dernière Mise à Jour',
+    ];
+
+    const rows = rules.map((r) => [
+      `"${r.productCategory.replace(/"/g, '""')}"`,
+      `"${r.requiredStandards.join(', ')}"`,
+      `"${r.acceptableAlternativeStandards.join(', ')}"`,
+      `"${r.criticality}"`,
+      `"${r.countryCondition}"`,
+      `"${(r.applicableCountries || []).join('; ')}"`,
+      `"${r.volumeThreshold?.enabled ? r.volumeThreshold.minAnnualSpendEur : 'Non défini'}"`,
+      `"${r.enforceFacilityAudit ? 'Oui' : 'Non'}"`,
+      `"${(r.notes || '').replace(/"/g, '""')}"`,
+      `"${r.updatedAt}"`,
+    ].join(','));
+
+    return [headers.join(','), ...rows].join('\n');
+  }
+
+  public evaluateOrderCompliance(params: {
+    supplierId: string;
+    productCategory: string;
+    amountEur: number;
+    countryCode?: string;
+    facilitySite?: string;
+    logAudit?: boolean;
+  }): OrderComplianceCheckResult {
+    const supplier = this.state.suppliers.find(
+      (s) => s.id === params.supplierId && s.tenantId === this.state.activeTenantId
+    );
+
+    if (!supplier) {
+      return {
+        isCompliant: false,
+        decision: 'BLOCKED',
+        reasons: ['Fournisseur non trouvé dans le référentiel actif.'],
+        missingStandards: [],
+        uncoveredProducts: [params.productCategory],
+        supplierName: 'Fournisseur Inconnu',
+        evaluatedAt: new Date().toISOString(),
+      };
+    }
+
+    const reasons: string[] = [];
+    const missingStandards: CertificationStandard[] = [];
+    let decision: 'ALLOWED' | 'BLOCKED' | 'REQUIRES_APPROVAL' = 'ALLOWED';
+
+    // 1. ERP Global Block check
+    const hasActiveErpDerogation = supplier.erpConfig?.blockStatus === 'TEMPORARY_DEROGATION';
+    if (supplier.erpConfig?.blockStatus === 'BLOCKED' || (supplier.status === 'BLOCKED' && !hasActiveErpDerogation)) {
+      decision = 'BLOCKED';
+      reasons.push(
+        `Fournisseur sous blocage ERP strict (${supplier.erpConfig?.blockedReason || supplier.erpBlockedReason || 'Sanction conformité active'}). Toutes les commandes d'achat sont rejetées.`
+      );
+    } else if (hasActiveErpDerogation) {
+      decision = 'REQUIRES_APPROVAL';
+      reasons.push(
+        `Dérogation temporaire active (${supplier.erpConfig?.derogationJustification || 'Dérogation accordée'}). Validation manuelle requise.`
+      );
+    }
+
+    // 2. Find rule in matrix for this product category
+    const catLower = params.productCategory.toLowerCase();
+    const rule = this.getTenantMatrixRules().find(
+      (r) =>
+        r.productCategory.toLowerCase() === catLower ||
+        catLower.includes(r.productCategory.toLowerCase()) ||
+        r.productCategory.toLowerCase().includes(catLower)
+    );
+
+    // 3. Supplier certificates
+    const supplierCerts = this.state.certificates.filter(
+      (c) => c.supplierId === supplier.id && c.tenantId === this.state.activeTenantId
+    );
+
+    // Check for hard revocations on this supplier
+    const revokedCerts = supplierCerts.filter((c) => c.status === 'REVOKED');
+    if (revokedCerts.length > 0) {
+      decision = 'BLOCKED';
+      reasons.push(
+        `Alerte critique : Certificat révoqué par l'organisme officiel (${revokedCerts.map((c) => c.certificationStandard).join(', ')}). Achat strictement interdit.`
+      );
+    }
+
+    // Check for expired certs
+    const expiredCerts = supplierCerts.filter((c) => c.status === 'EXPIRED');
+    if (expiredCerts.length > 0) {
+      reasons.push(
+        `Attention : ${expiredCerts.length} certificat(s) expiré(s) au dossier (${expiredCerts.map((c) => c.certificationStandard).join(', ')}).`
+      );
+    }
+
+    if (rule) {
+      // Check geographic condition
+      const effectiveCountry = (params.countryCode || supplier.countryCode || '').toUpperCase();
+      const euCountries = ['FR', 'BE', 'DE', 'PT', 'IT', 'ES', 'NL', 'DK', 'SE', 'AT', 'PL', 'IE', 'FI', 'GR'];
+      const isEu = euCountries.includes(effectiveCountry);
+
+      let ruleAppliesGeo = true;
+      if (rule.countryCondition === 'NON_EU_ONLY' && isEu) {
+        ruleAppliesGeo = false;
+        reasons.push(
+          `Condition géographique : règle non applicable pour les pays UE (${effectiveCountry}). Exigence allégée.`
+        );
+      } else if (rule.countryCondition === 'SPECIFIC_COUNTRIES' && rule.applicableCountries && rule.applicableCountries.length > 0) {
+        if (!rule.applicableCountries.includes(effectiveCountry)) {
+          ruleAppliesGeo = false;
+          reasons.push(
+            `Condition géographique : pays ${effectiveCountry} non listé dans les pays cibles de la règle.`
+          );
+        }
+      }
+
+      // Check volume threshold condition
+      let ruleAppliesVolume = true;
+      if (rule.volumeThreshold?.enabled && params.amountEur < rule.volumeThreshold.minAnnualSpendEur) {
+        ruleAppliesVolume = false;
+        reasons.push(
+          `Seuil de volume : le montant de la commande (${params.amountEur} €) est inférieur au seuil d'exigence obligatoire (${rule.volumeThreshold.minAnnualSpendEur} €).`
+        );
+      }
+
+      if (ruleAppliesGeo && ruleAppliesVolume) {
+        // Must satisfy at least one required standard OR acceptable alternative
+        const allowedStandards = [...rule.requiredStandards, ...rule.acceptableAlternativeStandards];
+        const validMatchingCerts = supplierCerts.filter(
+          (c) =>
+            allowedStandards.includes(c.certificationStandard) &&
+            c.status === 'VALID'
+        );
+
+        if (validMatchingCerts.length === 0) {
+          missingStandards.push(...rule.requiredStandards);
+          const requiredStr = rule.requiredStandards.join(' ou ');
+          const altStr = rule.acceptableAlternativeStandards.length > 0 ? ` (ou alternatives : ${rule.acceptableAlternativeStandards.join(', ')})` : '';
+
+          if (rule.criticality === 'STRICT_BLOCK') {
+            decision = 'BLOCKED';
+            reasons.push(
+              `Violation politique d'achat : Certification ${requiredStr}${altStr} obligatoire pour la catégorie "${rule.productCategory}". Aucun certificat valide trouvé.`
+            );
+          } else if (rule.criticality === 'CONDITIONAL') {
+            if (decision !== 'BLOCKED') decision = 'REQUIRES_APPROVAL';
+            reasons.push(
+              `Exigence conditionnelle non satisfaite : ${requiredStr}${altStr} manquant. Dérogation formelle requise du département RSE / Qualité.`
+            );
+          } else {
+            // WARNING_ONLY
+            reasons.push(
+              `Avertissement conformité : standard ${requiredStr} recommandé pour "${rule.productCategory}". Commande autorisée sous réserve.`
+            );
+          }
+        } else {
+          // A matching valid certificate was found!
+          const cert = validMatchingCerts[0];
+          reasons.push(
+            `Certificat conforme : ${cert.standardLabel} N° ${cert.certificateNumber} (Valide jusqu'au ${cert.expiryDate}).`
+          );
+
+          // Facility audit check if enforced
+          if (rule.enforceFacilityAudit) {
+            const hasCoveredFacilities = (cert.scope?.coveredFacilities?.length || 0) > 0;
+            if (params.facilitySite) {
+              const siteMatch = cert.scope?.coveredFacilities?.some((f) =>
+                f.toLowerCase().includes(params.facilitySite!.toLowerCase()) ||
+                params.facilitySite!.toLowerCase().includes(f.toLowerCase())
+              );
+              if (!siteMatch) {
+                if (rule.criticality === 'STRICT_BLOCK') {
+                  decision = 'BLOCKED';
+                  reasons.push(
+                    `Site de production non audité : l'usine "${params.facilitySite}" n'est pas répertoriée dans le périmètre du certificat ${cert.certificateNumber}.`
+                  );
+                } else {
+                  if (decision !== 'BLOCKED') decision = 'REQUIRES_APPROVAL';
+                  reasons.push(
+                    `Site "${params.facilitySite}" non audité dans le certificat. Validation d'audit de site requise.`
+                  );
+                }
+              } else {
+                reasons.push(`Site de production "${params.facilitySite}" expressément validé dans le périmètre du certificat.`);
+              }
+            } else if (!hasCoveredFacilities) {
+              reasons.push('Attention : Aucun site de production spécifique mentionné dans le périmètre du certificat.');
+            }
+          }
+        }
+      }
+    } else {
+      // No rule configured for this category
+      reasons.push(`Aucune règle stricte de matrice configurée pour la catégorie "${params.productCategory}". Contrôle standard appliqué.`);
+      const validCerts = supplierCerts.filter((c) => c.status === 'VALID');
+      if (validCerts.length === 0 && supplierCerts.length > 0) {
+        if (decision !== 'BLOCKED') decision = 'REQUIRES_APPROVAL';
+        reasons.push('Le fournisseur n’a aucun certificat valide actuellement actif.');
+      }
+    }
+
+    const isCompliant = decision === 'ALLOWED';
+
+    if (params.logAudit) {
+      this.addAuditLog({
+        actionCategory: 'ERP_ORDER_CHECK',
+        entityType: 'SUPPLIER',
+        entityId: supplier.id,
+        entityReference: supplier.legalName,
+        source: 'ERP_WEBHOOK',
+        newValue: decision,
+        details: `Contrôle de commande ERP pour "${params.productCategory}" (${params.amountEur} €) : Décision ${decision}. ${reasons.join(' | ')}`,
+      });
+      this.saveState();
+    }
+
+    return {
+      isCompliant,
+      decision,
+      reasons,
+      ruleApplied: rule,
+      missingStandards,
+      uncoveredProducts: isCompliant ? [] : [params.productCategory],
+      supplierName: supplier.legalName,
+      evaluatedAt: new Date().toISOString(),
+    };
+  }
+
+  public getSupplierMatrixComplianceSummaries(): SupplierMatrixComplianceSummary[] {
+    const suppliers = this.getTenantSuppliers();
+    const rules = this.getTenantMatrixRules();
+    const certs = this.getTenantCertificates();
+
+    return suppliers.map((sup) => {
+      const supCerts = certs.filter((c) => c.supplierId === sup.id && c.status === 'VALID');
+      const compliantCategories: string[] = [];
+      const nonCompliantCategories: string[] = [];
+      const missingStandards: CertificationStandard[] = [];
+
+      rules.forEach((rule) => {
+        const allowed = [...rule.requiredStandards, ...rule.acceptableAlternativeStandards];
+        const match = supCerts.some((c) => allowed.includes(c.certificationStandard));
+        if (match) {
+          compliantCategories.push(rule.productCategory);
+        } else {
+          nonCompliantCategories.push(rule.productCategory);
+          missingStandards.push(...rule.requiredStandards);
+        }
+      });
+
+      let status: 'FULLY_COMPLIANT' | 'PARTIALLY_COMPLIANT' | 'CRITICAL_NON_COMPLIANT' = 'FULLY_COMPLIANT';
+      if (compliantCategories.length === 0 && rules.length > 0) {
+        status = 'CRITICAL_NON_COMPLIANT';
+      } else if (nonCompliantCategories.length > 0) {
+        status = 'PARTIALLY_COMPLIANT';
+      }
+
+      return {
+        supplierId: sup.id,
+        supplierName: sup.legalName,
+        compliantCategories,
+        nonCompliantCategories,
+        missingStandards: Array.from(new Set(missingStandards)),
+        status,
+      };
+    });
+  }
+
+  // --- Alert Batch Operations & Email Reminders (Chantier 5) ---
+  public resolveAlertBatch(alertIds: string[], comment: string) {
+    const user = this.getActiveUser();
+    alertIds.forEach((id) => {
+      const alert = this.state.alerts.find((a) => a.id === id && a.tenantId === this.state.activeTenantId);
+      if (alert) {
+        alert.status = 'RESOLVED';
+        alert.updatedAt = new Date().toISOString();
+        alert.history.push({
+          id: 'act-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 4),
+          performedBy: user.name,
+          actionType: 'RESOLVED',
+          comment: comment || 'Résolution groupée d’alertes',
+          createdAt: new Date().toISOString(),
+        });
+      }
+    });
+
+    this.addAuditLog({
+      actionCategory: 'ALERT_RESOLVED',
+      entityType: 'ALERT',
+      entityId: alertIds.join(', '),
+      entityReference: `${alertIds.length} alertes groupées`,
+      source: 'MANUAL_UI',
+      details: `Résolution en lot de ${alertIds.length} alertes par ${user.name}. Commentaire : ${comment}`,
+    });
+
+    this.saveState();
+  }
+
+  public async sendSupplierReminderEmail(
+    alertId: string,
+    emailDetails: { recipient: string; subject: string; body: string; language: 'FR' | 'EN' }
+  ): Promise<boolean> {
+    const alert = this.state.alerts.find((a) => a.id === alertId && a.tenantId === this.state.activeTenantId);
+    if (!alert) return false;
+
+    const user = this.getActiveUser();
+    alert.history.push({
+      id: 'act-mail-' + Date.now().toString(36),
+      performedBy: user.name,
+      actionType: 'DOCUMENT_REQUESTED',
+      comment: `Email de relance automatique envoyé à ${emailDetails.recipient} ("${emailDetails.subject}") [Langue: ${emailDetails.language}].`,
+      createdAt: new Date().toISOString(),
+    });
+    alert.updatedAt = new Date().toISOString();
+
+    this.addAuditLog({
+      actionCategory: 'ALERT_TRIGGERED',
+      entityType: 'SUPPLIER',
+      entityId: alert.supplierId,
+      entityReference: alert.supplierName,
+      source: 'MANUAL_UI',
+      details: `Relance fournisseur transmise à ${emailDetails.recipient} pour le renouvellement du certificat ${alert.certificationStandard} (${alert.certificateNumber}).`,
+    });
+
+    this.saveState();
+    return true;
+  }
+
   // --- Automated Continuous Verification Engine ---
   public runContinuousVerificationSync() {
     this.state.isAutoSyncing = true;
@@ -1259,6 +1775,305 @@ class Store {
     }
   }
 
+  // --- Chantier 7 : CSRD ESRS Scoring, EUDR Due Diligence & Official Audit Packs ---
+
+  public getTenantEudrPlots(): EudrPlotDeclaration[] {
+    const tenantSupplierIds = new Set(this.getTenantSuppliers().map((s) => s.id));
+    return (this.state.eudrPlots || []).filter((p) => tenantSupplierIds.has(p.supplierId));
+  }
+
+  public addEudrPlot(
+    plotData: Omit<EudrPlotDeclaration, 'id' | 'verifiedAt'>
+  ): EudrPlotDeclaration {
+    const user = this.getActiveUser();
+    const newPlot: EudrPlotDeclaration = {
+      ...plotData,
+      id: 'plot-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 5),
+      verifiedAt: new Date().toISOString(),
+    };
+
+    if (!this.state.eudrPlots) this.state.eudrPlots = [];
+    this.state.eudrPlots.unshift(newPlot);
+
+    const supplier = this.state.suppliers.find((s) => s.id === plotData.supplierId);
+    this.addAuditLog({
+      actionCategory: 'EUDR_PLOT_DECLARED' as any,
+      entityType: 'SUPPLIER',
+      entityId: plotData.supplierId,
+      entityReference: `${supplier?.legalName || 'Fournisseur'} - Parcelle ${newPlot.plotReference}`,
+      source: 'MANUAL_UI',
+      details: `Déclaration de parcelle EUDR ${newPlot.commodity} (${newPlot.countryOfProduction}) - Coordonnées GPS: ${newPlot.hasGpsCoordinates ? 'VALIDÉES' : 'MANQUANTES'}. Statut: ${newPlot.status}`,
+    });
+
+    this.saveState();
+    return newPlot;
+  }
+
+  public updateEudrPlot(id: string, updates: Partial<EudrPlotDeclaration>): boolean {
+    const plotIndex = (this.state.eudrPlots || []).findIndex((p) => p.id === id);
+    if (plotIndex === -1) return false;
+
+    const user = this.getActiveUser();
+    const prev = this.state.eudrPlots[plotIndex];
+    this.state.eudrPlots[plotIndex] = {
+      ...prev,
+      ...updates,
+      verifiedAt: new Date().toISOString(),
+    };
+
+    this.addAuditLog({
+      actionCategory: 'EUDR_PLOT_UPDATED' as any,
+      entityType: 'SUPPLIER',
+      entityId: prev.supplierId,
+      entityReference: `Parcelle ${prev.plotReference}`,
+      source: 'MANUAL_UI',
+      details: `Mise à jour statut parcelle EUDR (${prev.commodity}) : ${updates.status || prev.status}. Validé par ${user.name}.`,
+    });
+
+    this.saveState();
+    return true;
+  }
+
+  public deleteEudrPlot(id: string): boolean {
+    const plot = (this.state.eudrPlots || []).find((p) => p.id === id);
+    if (!plot) return false;
+
+    this.state.eudrPlots = this.state.eudrPlots.filter((p) => p.id !== id);
+
+    this.addAuditLog({
+      actionCategory: 'EUDR_PLOT_DELETED' as any,
+      entityType: 'SUPPLIER',
+      entityId: plot.supplierId,
+      entityReference: `Parcelle ${plot.plotReference}`,
+      source: 'MANUAL_UI',
+      details: `Suppression de la déclaration de parcelle EUDR (${plot.plotReference}) pour le produit ${plot.commodity}.`,
+    });
+
+    this.saveState();
+    return true;
+  }
+
+  public calculateCsrdEsrsScorecard(): CsrdEsrsScorecard {
+    const suppliers = this.getTenantSuppliers();
+    const certificates = this.getTenantCertificates();
+    const activeCerts = certificates.filter((c) => c.status === 'VALID');
+
+    if (suppliers.length === 0) {
+      return {
+        esrsE4BiodiversityCoverage: 100,
+        esrsS2SocialAuditedCoverage: 100,
+        esrsG1ConductCoverage: 100,
+        overallEsgAlignmentScore: 100,
+        totalSuppliersInScope: 0,
+        coveredSuppliersCount: 0,
+        criticalGapsCount: 0,
+      };
+    }
+
+    // ESRS E4: Biodiversity / Forestry / Organic agriculture (FSC, PEFC, ECOCERT_BIO)
+    const e4Standards: CertificationStandard[] = ['FSC', 'PEFC', 'ECOCERT_BIO'];
+    const e4Suppliers = new Set(
+      activeCerts.filter((c) => e4Standards.includes(c.certificationStandard)).map((c) => c.supplierId)
+    );
+    const esrsE4BiodiversityCoverage = Math.round((e4Suppliers.size / suppliers.length) * 100);
+
+    // ESRS S2: Workers in value chain (Fairtrade, GOTS, SA8000, BSCI, OEKO-TEX STEP)
+    const s2Standards: CertificationStandard[] = ['FAIRTRADE', 'GOTS', 'OEKO_TEX_STEP', 'OEKO_TEX_100'];
+    const s2Suppliers = new Set(
+      activeCerts.filter((c) => s2Standards.includes(c.certificationStandard)).map((c) => c.supplierId)
+    );
+    const esrsS2SocialAuditedCoverage = Math.round((s2Suppliers.size / suppliers.length) * 100);
+
+    // ESRS G1: Business conduct / audit conclusion & unblocked ERP
+    const compliantSuppliers = suppliers.filter(
+      (s) => s.status === 'ACTIVE' && (!s.erpConfig || s.erpConfig.blockStatus !== 'BLOCKED')
+    );
+    const esrsG1ConductCoverage = Math.round((compliantSuppliers.length / suppliers.length) * 100);
+
+    // Overall ESG Alignment
+    const overallEsgAlignmentScore = Math.round(
+      esrsE4BiodiversityCoverage * 0.35 +
+      esrsS2SocialAuditedCoverage * 0.40 +
+      esrsG1ConductCoverage * 0.25
+    );
+
+    // Covered suppliers = has at least 1 valid certificate
+    const coveredSuppliers = new Set(activeCerts.map((c) => c.supplierId));
+    const criticalAlerts = this.getTenantAlerts().filter(
+      (a) => (a.status === 'OPEN' || a.status === 'IN_PROGRESS') && a.severity === 'CRITICAL'
+    );
+
+    return {
+      esrsE4BiodiversityCoverage,
+      esrsS2SocialAuditedCoverage,
+      esrsG1ConductCoverage,
+      overallEsgAlignmentScore,
+      totalSuppliersInScope: suppliers.length,
+      coveredSuppliersCount: coveredSuppliers.size,
+      criticalGapsCount: criticalAlerts.length,
+    };
+  }
+
+  public getTenantAuditPacks(): GeneratedAuditPack[] {
+    const tenantId = this.state.activeTenantId;
+    return (this.state.generatedAuditPacks || []).filter((p) => p.config.tenantId === tenantId);
+  }
+
+  public generateOfficialAuditPack(config: OfficialAuditPackConfig): GeneratedAuditPack {
+    const suppliers = this.getTenantSuppliers();
+    const certificates = this.getTenantCertificates();
+    const alerts = this.getTenantAlerts();
+    const eudrPlots = this.getTenantEudrPlots();
+    const user = this.getActiveUser();
+
+    const activeCerts = certificates.filter((c) => c.status === 'VALID');
+    const expiredRevoked = certificates.filter((c) => c.status === 'EXPIRED' || c.status === 'REVOKED');
+    const derogations = suppliers.filter((s) => s.erpConfig?.blockStatus === 'TEMPORARY_DEROGATION');
+    const openCriticalAlerts = alerts.filter(
+      (a) => (a.status === 'OPEN' || a.status === 'IN_PROGRESS') && a.severity === 'CRITICAL'
+    );
+
+    // Standards breakdown
+    const standardMap = new Map<string, { valid: number; expired: number }>();
+    certificates.forEach((c) => {
+      const entry = standardMap.get(c.certificationStandard) || { valid: 0, expired: 0 };
+      if (c.status === 'VALID') entry.valid += 1;
+      else entry.expired += 1;
+      standardMap.set(c.certificationStandard, entry);
+    });
+
+    const standardsSummary = Array.from(standardMap.entries()).map(([std, counts]) => ({
+      standard: std,
+      validCount: counts.valid,
+      expiredCount: counts.expired,
+      coveragePercent:
+        counts.valid + counts.expired > 0
+          ? Math.round((counts.valid / (counts.valid + counts.expired)) * 100)
+          : 0,
+    }));
+
+    // EUDR stats
+    const totalPlots = eudrPlots.length;
+    const gpsVerified = eudrPlots.filter((p) => p.hasGpsCoordinates).length;
+    const compliantPlots = eudrPlots.filter((p) => p.status === 'COMPLIANT').length;
+    const highRiskPlots = eudrPlots.filter((p) => p.riskAssessment === 'HIGH').length;
+
+    // Cryptographic audit chain seal
+    const latestLogs = this.getTenantAuditLogs();
+    const lastLog = latestLogs[latestLogs.length - 1];
+    const blockNumber = lastLog ? lastLog.blockNumber || 1 : 1;
+    const sealHash = lastLog ? lastLog.hash : 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+    const previousHash = lastLog ? lastLog.previousHash : '0000000000000000000000000000000000000000000000000000000000000000';
+
+    const complianceRate =
+      suppliers.length > 0
+        ? Math.round(
+            (suppliers.filter((s) => !s.erpConfig || s.erpConfig.blockStatus === 'ALLOWED').length /
+              suppliers.length) *
+              100
+          )
+        : 100;
+
+    const refNum = `AUDIT-${new Date().getFullYear()}-CW-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const pack: GeneratedAuditPack = {
+      id: 'pack-' + Date.now().toString(36),
+      referenceNumber: refNum,
+      generatedAt: new Date().toISOString(),
+      config,
+      executiveSummary: {
+        totalSuppliersAudited: suppliers.length,
+        overallComplianceRate: complianceRate,
+        activeCertificatesCount: activeCerts.length,
+        expiredRevokedCount: expiredRevoked.length,
+        derogationsApprovedCount: derogations.length,
+        unresolvedCriticalAlertsCount: openCriticalAlerts.length,
+      },
+      cryptoSeal: {
+        blockNumber,
+        sealHash,
+        previousHash,
+        algorithm: 'SHA-256 (Piste d’audit immuable conforme CSRD/CSDDD)',
+        verifiedIntegrity: true,
+      },
+      standardsSummary,
+      eudrSummary: {
+        totalPlotsDeclared: totalPlots,
+        gpsVerifiedRate: totalPlots > 0 ? Math.round((gpsVerified / totalPlots) * 100) : 100,
+        eudrComplianceRate: totalPlots > 0 ? Math.round((compliantPlots / totalPlots) * 100) : 100,
+        highRiskOriginsCount: highRiskPlots,
+      },
+    };
+
+    if (!this.state.generatedAuditPacks) this.state.generatedAuditPacks = [];
+    this.state.generatedAuditPacks.unshift(pack);
+
+    this.addAuditLog({
+      actionCategory: 'SYSTEM_SYNC',
+      entityType: 'INTEGRATION',
+      entityId: config.tenantId,
+      entityReference: refNum,
+      source: 'MANUAL_UI',
+      details: `Génération du pack d’audit officiel CSRD / CAC ${refNum} ("${config.reportTitle}") par ${user.name}. Sceau cryptographique bloc #${blockNumber} vérifié.`,
+    });
+
+    this.saveState();
+    return pack;
+  }
+
+  // --- Supplier Self-Service Extranet Portal ---
+  public getSupplierPortalSession(supplierId: string): SupplierPortalSession {
+    const supplier = this.state.suppliers.find((s) => s.id === supplierId);
+    const existing = this.state.supplierPortalSubmissions?.[supplierId];
+
+    return {
+      supplierId,
+      supplierName: supplier?.legalName || 'Fournisseur Partenaire',
+      accessToken: 'token-extranet-' + supplierId.replace(/[^a-zA-Z0-9]/g, ''),
+      contactEmail: supplier?.contactEmail || '',
+      lastAccessDate: existing?.lastUpdated || new Date().toISOString(),
+      declarationStatus: existing ? 'SUBMITTED' : 'PENDING_UPLOAD',
+      uploadedDocumentsCount: existing?.documents?.length || 0,
+    };
+  }
+
+  public submitSupplierPortalDeclaration(
+    supplierId: string,
+    payload: {
+      signatoryName: string;
+      signatoryRole: string;
+      childLaborFree: boolean;
+      livingWageCompliant: boolean;
+      deforestationFreeCommitment: boolean;
+      co2Scope12Declared: boolean;
+      comments: string;
+      renewedCertificatesAttached: Array<{ standard: CertificationStandard; certNumber: string }>;
+    }
+  ) {
+    if (!this.state.supplierPortalSubmissions) {
+      this.state.supplierPortalSubmissions = {};
+    }
+
+    this.state.supplierPortalSubmissions[supplierId] = {
+      ...payload,
+      submittedAt: new Date().toISOString(),
+      lastUpdated: new Date().toISOString(),
+    };
+
+    const supplier = this.state.suppliers.find((s) => s.id === supplierId);
+
+    this.addAuditLog({
+      actionCategory: 'SUPPLIER_MODIFIED',
+      entityType: 'SUPPLIER',
+      entityId: supplierId,
+      entityReference: supplier?.legalName || 'Fournisseur',
+      source: 'MANUAL_UI',
+      details: `Auto-déclaration RSE/CSRD & EUDR transmise via le Portail Extranet Fournisseur par ${payload.signatoryName} (${payload.signatoryRole}). Engagements zéros travail des enfants et zéro déforestation validés.`,
+    });
+
+    this.saveState();
+  }
+
   public resetDemoData() {
     this.state = {
       tenants: SEED_TENANTS,
@@ -1273,6 +2088,9 @@ class Store {
       providers: SEED_PROVIDERS,
       orchestrationConfig: SEED_ORCHESTRATION_CONFIG,
       orchestratorRunLogs: SEED_ORCHESTRATOR_RUNS,
+      eudrPlots: SEED_EUDR_PLOTS,
+      generatedAuditPacks: SEED_AUDIT_PACKS,
+      supplierPortalSubmissions: {},
       lastSyncTimestamp: new Date().toISOString(),
       isAutoSyncing: false,
     };

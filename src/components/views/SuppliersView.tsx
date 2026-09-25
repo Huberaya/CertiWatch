@@ -11,6 +11,7 @@ import { SupplierStatusBadge, RiskBadge, CertificateStatusBadge } from '../ui/Ba
 import { Modal } from '../ui/Modal';
 import { SupplierDetailModal } from '../suppliers/SupplierDetailModal';
 import { SupplierImportModal } from '../suppliers/SupplierImportModal';
+import { SupplierPortalModal } from '../portal/SupplierPortalModal';
 import { appStore } from '../../db/store';
 import {
   Building2,
@@ -80,6 +81,7 @@ export function SuppliersView({
   // Modals state
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [extranetSupplierId, setExtranetSupplierId] = useState<string | null>(null);
   const [isRecalculating, setIsRecalculating] = useState(false);
 
   // Bulk selection
@@ -225,6 +227,15 @@ export function SuppliersView({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setExtranetSupplierId(suppliers[0]?.id || null)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition-colors"
+              title="Ouvrir le portail extranet en libre-service fournisseur"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Portail Extranet</span>
+            </button>
+
             <button
               onClick={handleExportCSV}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold transition-colors"
@@ -725,6 +736,15 @@ export function SuppliersView({
         <SupplierImportModal
           isOpen={showImportModal}
           onClose={() => setShowImportModal(false)}
+        />
+      )}
+
+      {/* Supplier Self-Service Extranet Portal Modal */}
+      {extranetSupplierId && (
+        <SupplierPortalModal
+          isOpen={!!extranetSupplierId}
+          onClose={() => setExtranetSupplierId(null)}
+          supplierId={extranetSupplierId}
         />
       )}
 

@@ -5,6 +5,7 @@ import { ComplianceAlert } from '../types/alert';
 import { AuditLogEntry } from '../types/audit';
 import { ComplianceMatrixRule } from '../types/matrix';
 import { CertificationProviderMetadata, OrchestrationConfig, OrchestratorRunLog } from '../types/connector';
+import { EudrPlotDeclaration, GeneratedAuditPack } from '../types/report';
 
 export const SEED_TENANTS: Tenant[] = [
   {
@@ -1075,6 +1076,10 @@ export const SEED_AUDIT_LOGS: AuditLogEntry[] = [
     newValue: 'REVOKED',
     details: 'Synchronisation du registre officiel FSC (info.fsc.org) : Statut mis à jour vers REVOKED suite à suspension du certificat.',
     ipAddress: '10.0.4.12',
+    blockNumber: 5,
+    previousHash: 'b4a8e32918dfc47101ad4f810e82c5a772b109e4a9058b4389d4e12fa8723c10',
+    hash: 'fa920d3678129e71b56a472c918ef0132b4908df31cb98a729e84019fa308e71',
+    digitalSeal: 'CERT-SEAL-FA920D3678129E71-ED25519-AUTH',
   },
   {
     id: 'log-102',
@@ -1083,7 +1088,7 @@ export const SEED_AUDIT_LOGS: AuditLogEntry[] = [
     userId: 'system-erp',
     userName: 'CertiWatch ERP Connector',
     userRole: 'SYSTEM',
-    actionCategory: 'ERP_ORDER_CHECK',
+    actionCategory: 'ERP_BLOCK_TRIGGERED',
     entityType: 'SUPPLIER',
     entityId: 'sup-danone-03',
     entityReference: 'Cartonneries Européennes & Cellulose SA',
@@ -1092,6 +1097,10 @@ export const SEED_AUDIT_LOGS: AuditLogEntry[] = [
     newValue: 'BLOCKED',
     details: 'Webhook ERP SAP déclenché : Statut fournisseur passé à BLOCKED suite à la révocation du certificat FSC.',
     ipAddress: '10.0.4.12',
+    blockNumber: 4,
+    previousHash: 'a718c3924ef089b12a3d7e5518b0492f190e38d74ca291845189b27419e048df',
+    hash: 'b4a8e32918dfc47101ad4f810e82c5a772b109e4a9058b4389d4e12fa8723c10',
+    digitalSeal: 'CERT-SEAL-B4A8E32918DFC471-ED25519-AUTH',
   },
   {
     id: 'log-103',
@@ -1109,6 +1118,10 @@ export const SEED_AUDIT_LOGS: AuditLogEntry[] = [
     newValue: 'SUSPENDED',
     details: 'Détection d’une anomalie critique entre le document archivé et le registre public Ecocert. Statut suspendu.',
     ipAddress: '10.0.4.12',
+    blockNumber: 3,
+    previousHash: '72e903a48bf1290e54cd8912ef389410ea82914bf190e8234190ba824910ef39',
+    hash: 'a718c3924ef089b12a3d7e5518b0492f190e38d74ca291845189b27419e048df',
+    digitalSeal: 'CERT-SEAL-A718C3924EF089B1-ED25519-AUTH',
   },
   {
     id: 'log-104',
@@ -1126,6 +1139,10 @@ export const SEED_AUDIT_LOGS: AuditLogEntry[] = [
     newValue: 'MATCH',
     details: 'Vérification manuelle déclenchée depuis le portail. 100% de concordance validée.',
     ipAddress: '194.254.12.8',
+    blockNumber: 2,
+    previousHash: '0000000000000000000000000000000000000000000000000000000000000000',
+    hash: '72e903a48bf1290e54cd8912ef389410ea82914bf190e8234190ba824910ef39',
+    digitalSeal: 'CERT-SEAL-72E903A48BF1290E-ED25519-AUTH',
   },
   {
     id: 'log-105',
@@ -1143,6 +1160,10 @@ export const SEED_AUDIT_LOGS: AuditLogEntry[] = [
     newValue: 'IN_PROGRESS',
     details: 'Prise en charge de l’alerte et demande expresse de renouvellement transmise au fournisseur.',
     ipAddress: '194.254.12.9',
+    blockNumber: 1,
+    previousHash: '0000000000000000000000000000000000000000000000000000000000000000',
+    hash: '0000000000000000000000000000000000000000000000000000000000000000',
+    digitalSeal: 'CERT-SEAL-GENESIS-DANONE-ED25519',
   },
 ];
 
@@ -1154,7 +1175,9 @@ export const SEED_COMPLIANCE_MATRIX: ComplianceMatrixRule[] = [
     requiredStandards: ['ECOCERT_BIO'],
     acceptableAlternativeStandards: [],
     criticality: 'STRICT_BLOCK',
+    countryCondition: 'ALL_COUNTRIES',
     enforceFacilityAudit: true,
+    volumeThreshold: { enabled: false, minAnnualSpendEur: 0 },
     notes: 'Exigence réglementaire européenne CE 2018/848. Aucun approvisionnement autorisé sans certificat bio valide couvrant les sites d’élevage et d’embouteillage.',
     updatedAt: '2026-08-01T10:00:00Z',
   },
@@ -1165,7 +1188,9 @@ export const SEED_COMPLIANCE_MATRIX: ComplianceMatrixRule[] = [
     requiredStandards: ['FSC'],
     acceptableAlternativeStandards: ['PEFC'],
     criticality: 'STRICT_BLOCK',
+    countryCondition: 'ALL_COUNTRIES',
     enforceFacilityAudit: false,
+    volumeThreshold: { enabled: false, minAnnualSpendEur: 0 },
     notes: 'Politique Zéro Déforestation Danone 2030 : certification FSC Chain of Custody ou PEFC obligatoire sur tout emballage en contact alimentaire.',
     updatedAt: '2026-08-01T10:00:00Z',
   },
@@ -1175,12 +1200,40 @@ export const SEED_COMPLIANCE_MATRIX: ComplianceMatrixRule[] = [
     productCategory: 'Cacao & Dérivés Filière Sud',
     requiredStandards: ['FAIRTRADE'],
     acceptableAlternativeStandards: ['ECOCERT_BIO'],
-    criticality: 'WARNING_ONLY',
+    criticality: 'STRICT_BLOCK',
+    countryCondition: 'NON_EU_ONLY',
     enforceFacilityAudit: true,
-    notes: 'Engagement RSE approvisionnement équitable. Blocage progressif prévu à horizon 2027.',
+    volumeThreshold: { enabled: true, minAnnualSpendEur: 20000 },
+    notes: 'Approvisionnements responsables : certification Fairtrade / Max Havelaar obligatoire dès 20 000 € d’achats pour tout fournisseur situé hors Union Européenne.',
     updatedAt: '2026-08-15T14:30:00Z',
   },
-  // Kering rule
+  {
+    id: 'rule-danone-04',
+    tenantId: 'tenant-danone-global',
+    productCategory: 'Fruits Secs & Purées Bio',
+    requiredStandards: ['ECOCERT_BIO'],
+    acceptableAlternativeStandards: [],
+    criticality: 'STRICT_BLOCK',
+    countryCondition: 'ALL_COUNTRIES',
+    enforceFacilityAudit: true,
+    volumeThreshold: { enabled: false, minAnnualSpendEur: 0 },
+    notes: 'Obligation de certification de l’atelier de transformation et de pasteurisation (les simples vergers agricoles ne suffisent pas).',
+    updatedAt: '2026-08-20T09:00:00Z',
+  },
+  {
+    id: 'rule-danone-05',
+    tenantId: 'tenant-danone-global',
+    productCategory: 'Sucre de Canne & Édulcorants Bio',
+    requiredStandards: ['ECOCERT_BIO'],
+    acceptableAlternativeStandards: ['FAIRTRADE'],
+    criticality: 'WARNING_ONLY',
+    countryCondition: 'ALL_COUNTRIES',
+    enforceFacilityAudit: false,
+    volumeThreshold: { enabled: false, minAnnualSpendEur: 0 },
+    notes: 'Priorité bio avec tolérance équitable sous réserve d’approbation de la direction achats.',
+    updatedAt: '2026-09-01T11:00:00Z',
+  },
+  // Kering rules
   {
     id: 'rule-kering-01',
     tenantId: 'tenant-kering-luxury',
@@ -1188,8 +1241,153 @@ export const SEED_COMPLIANCE_MATRIX: ComplianceMatrixRule[] = [
     requiredStandards: ['GOTS'],
     acceptableAlternativeStandards: ['GRS'],
     criticality: 'STRICT_BLOCK',
+    countryCondition: 'ALL_COUNTRIES',
     enforceFacilityAudit: true,
+    volumeThreshold: { enabled: false, minAnnualSpendEur: 0 },
     notes: 'Standard Kering Matières Premières Durables : Coton 100% biologique certifié GOTS exigé pour toutes les Maisons du groupe.',
     updatedAt: '2026-07-20T11:00:00Z',
   },
+  {
+    id: 'rule-kering-02',
+    tenantId: 'tenant-kering-luxury',
+    productCategory: 'Teintures & Façonnage Textile',
+    requiredStandards: ['OEKO_TEX_100'],
+    acceptableAlternativeStandards: ['OEKO_TEX_STEP'],
+    criticality: 'STRICT_BLOCK',
+    countryCondition: 'ALL_COUNTRIES',
+    enforceFacilityAudit: true,
+    volumeThreshold: { enabled: false, minAnnualSpendEur: 0 },
+    notes: 'Réglementation REACH & innocuité : conformité OEKO-TEX Standard 100 obligatoire sur tous les textiles teints.',
+    updatedAt: '2026-07-22T14:00:00Z',
+  },
 ];
+
+// --- EUDR (EU Deforestation Regulation) Initial Plot Declarations ---
+export const SEED_EUDR_PLOTS: EudrPlotDeclaration[] = [
+  {
+    id: 'eudr-plot-01',
+    supplierId: 'sup-danone-02', // Agrícola Andina del Cacao S.A.C.
+    commodity: 'COCOA',
+    countryOfProduction: 'Pérou (San Martín / Tocache)',
+    plotReference: 'PER-SM-TOC-2024-LOT-44B',
+    hasGpsCoordinates: true,
+    gpsPolygonOrPoint: '-8.18721, -76.51442 (Polygone 14.8 ha)',
+    deforestationCutoffDateMet: true, // No deforestation after Dec 31, 2020
+    legalityVerified: true,
+    tracesNtDdsReference: 'DDS-EUDR-2026-PE-098842',
+    status: 'COMPLIANT',
+    riskAssessment: 'STANDARD',
+    verifiedAt: '2026-08-14T10:30:00Z',
+  },
+  {
+    id: 'eudr-plot-02',
+    supplierId: 'sup-danone-02', // Agrícola Andina del Cacao S.A.C.
+    commodity: 'COCOA',
+    countryOfProduction: 'Pérou (Ucayali / Coronel Portillo)',
+    plotReference: 'PER-UC-CP-2025-PARC-12A',
+    hasGpsCoordinates: false,
+    gpsPolygonOrPoint: 'Coordonnées GPS incomplètes (Manque polygone de délimitation > 4ha)',
+    deforestationCutoffDateMet: true,
+    legalityVerified: false,
+    tracesNtDdsReference: undefined,
+    status: 'WARNING_DATA_MISSING',
+    riskAssessment: 'HIGH',
+    verifiedAt: '2026-09-02T14:15:00Z',
+  },
+  {
+    id: 'eudr-plot-03',
+    supplierId: 'sup-danone-03', // Cartonneries Européennes & Cellulose SA
+    commodity: 'WOOD_TIMBER',
+    countryOfProduction: 'Suède (Dalarna / Siljan Forest)',
+    plotReference: 'SWE-DAL-SIL-FSC-8812',
+    hasGpsCoordinates: true,
+    gpsPolygonOrPoint: '60.85241, 14.98124 (Polygone Forêt Certifiée 320 ha)',
+    deforestationCutoffDateMet: true,
+    legalityVerified: true,
+    tracesNtDdsReference: 'DDS-EUDR-2026-SE-441091',
+    status: 'COMPLIANT',
+    riskAssessment: 'NEGLIGIBLE',
+    verifiedAt: '2026-08-25T09:00:00Z',
+  },
+  {
+    id: 'eudr-plot-04',
+    supplierId: 'sup-danone-03', // Cartonneries Européennes & Cellulose SA
+    commodity: 'PAPER_PACKAGING',
+    countryOfProduction: 'France (Massif Vosgien)',
+    plotReference: 'FRA-VOS-GER-2024-001',
+    hasGpsCoordinates: true,
+    gpsPolygonOrPoint: '48.07210, 6.87410 (Polygone PEFC 85 ha)',
+    deforestationCutoffDateMet: true,
+    legalityVerified: true,
+    tracesNtDdsReference: 'DDS-EUDR-2026-FR-112044',
+    status: 'COMPLIANT',
+    riskAssessment: 'NEGLIGIBLE',
+    verifiedAt: '2026-09-10T16:20:00Z',
+  },
+  {
+    id: 'eudr-plot-05',
+    supplierId: 'sup-danone-05', // Sucreries & Distilleries Réunionnaises Bio
+    commodity: 'SOY',
+    countryOfProduction: 'Brésil (Mato Grosso / Sorriso)',
+    plotReference: 'BRA-MT-SOR-2025-EXT-99C',
+    hasGpsCoordinates: true,
+    gpsPolygonOrPoint: '-12.54210, -55.71230 (Polygone 450 ha)',
+    deforestationCutoffDateMet: false, // Deforestation detected post-2020 on satellite alert
+    legalityVerified: false,
+    tracesNtDdsReference: undefined,
+    status: 'NON_COMPLIANT_BLOCKED',
+    riskAssessment: 'HIGH',
+    verifiedAt: '2026-09-18T11:45:00Z',
+  },
+];
+
+// --- Generated Official Audit Packs ---
+export const SEED_AUDIT_PACKS: GeneratedAuditPack[] = [
+  {
+    id: 'pack-2026-danone-01',
+    referenceNumber: 'AUDIT-2026-CW-DAN-001',
+    generatedAt: '2026-09-20T10:00:00Z',
+    config: {
+      reportTitle: 'Rapport Annuel de Conformité Chaîne d’Approvisionnement CSRD ESRS E4 & S2',
+      fiscalYear: 'Exercice 2025/2026',
+      periodStart: '2025-01-01',
+      periodEnd: '2026-09-20',
+      leadAuditor: 'Claire de Montmirail (Direction RSE)',
+      auditBody: 'PwC ESG Assurance & Commissaires aux Comptes',
+      tenantId: 'tenant-danone-global',
+      includeCertificatesDetails: true,
+      includeCryptoProofSeal: true,
+      includeEudrAnnexes: true,
+      includeCapaRemediation: true,
+    },
+    executiveSummary: {
+      totalSuppliersAudited: 5,
+      overallComplianceRate: 88,
+      activeCertificatesCount: 14,
+      expiredRevokedCount: 2,
+      derogationsApprovedCount: 1,
+      unresolvedCriticalAlertsCount: 1,
+    },
+    cryptoSeal: {
+      blockNumber: 42,
+      sealHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      previousHash: 'a718c392f1b0a7b451f28b71d99d1234567890abcdef1234567890abcdef1234',
+      algorithm: 'SHA-256 (Chaîne d’audit certifiée)',
+      verifiedIntegrity: true,
+    },
+    standardsSummary: [
+      { standard: 'ECOCERT_BIO', validCount: 4, expiredCount: 0, coveragePercent: 100 },
+      { standard: 'FSC', validCount: 3, expiredCount: 0, coveragePercent: 100 },
+      { standard: 'FAIRTRADE', validCount: 2, expiredCount: 1, coveragePercent: 67 },
+      { standard: 'GOTS', validCount: 1, expiredCount: 0, coveragePercent: 100 },
+      { standard: 'OEKO_TEX_100', validCount: 1, expiredCount: 0, coveragePercent: 100 },
+    ],
+    eudrSummary: {
+      totalPlotsDeclared: 5,
+      gpsVerifiedRate: 80,
+      eudrComplianceRate: 60,
+      highRiskOriginsCount: 2,
+    },
+  },
+];
+

@@ -10,7 +10,10 @@ export type AuditActionCategory =
   | 'ERP_ORDER_CHECK'
   | 'ERP_BLOCK_TRIGGERED'
   | 'MATRIX_RULE_UPDATED'
-  | 'SYSTEM_SYNC';
+  | 'SYSTEM_SYNC'
+  | 'DEROGATION_GRANTED'
+  | 'SUPPLIER_REMINDER_SENT'
+  | 'FRAUD_SUSPICION_FLAGGED';
 
 export interface AuditLogEntry {
   id: string;
@@ -28,4 +31,33 @@ export interface AuditLogEntry {
   newValue?: string;
   details: string;
   ipAddress?: string;
+  hash: string;
+  previousHash: string;
+  blockNumber: number;
+  digitalSeal: string;
+}
+
+export interface AuditChainVerificationResult {
+  isChainValid: boolean;
+  totalBlocksVerified: number;
+  genesisBlockHash: string;
+  latestBlockHash: string;
+  tamperedEntriesCount: number;
+  tamperedIds: string[];
+  algorithm: string;
+  verifiedAt: string;
+}
+
+export interface LegalComplianceReportSummary {
+  tenantName: string;
+  reportId: string;
+  generatedAt: string;
+  reportingPeriod: string;
+  totalAuditedEvents: number;
+  erpOrdersEvaluated: number;
+  hardBlocksEnforced: number;
+  derogationsAuthorized: number;
+  fraudAlertsDetected: number;
+  chainIntegrityStatus: 'VERIFIED_IMMUTABLE' | 'COMPROMISED';
+  complianceSealSignature: string;
 }
