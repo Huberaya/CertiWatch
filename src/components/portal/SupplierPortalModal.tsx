@@ -537,7 +537,21 @@ export function SupplierPortalModal({
               <button
                 type="button"
                 onClick={() => {
-                  alert("Badge officiel téléchargé au format SVG haute résolution pour insertion dans vos supports commerciaux.");
+                  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120">
+                    <rect width="400" height="120" rx="16" fill="#0f172a" stroke="#10b981" stroke-width="2"/>
+                    <text x="20" y="45" fill="#10b981" font-size="18" font-family="sans-serif" font-weight="bold">CertiWatch Verified Supplier</text>
+                    <text x="20" y="75" fill="#94a3b8" font-size="12" font-family="sans-serif">${supplier.legalName}</text>
+                    <text x="20" y="95" fill="#64748b" font-size="10" font-family="sans-serif">Conforme CSRD, EUDR &amp; GOTS • ID: ${supplier.id}</text>
+                  </svg>`;
+                  const blob = new Blob([svg], { type: 'image/svg+xml' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `certiwatch_badge_${supplier.id}.svg`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
                 }}
                 className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-bold flex items-center gap-2 transition-colors"
               >

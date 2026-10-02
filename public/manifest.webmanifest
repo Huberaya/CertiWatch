@@ -1,0 +1,31 @@
+{
+  "name": "CertiWatch — Conformité Fournisseurs & RSE",
+  "short_name": "CertiWatch",
+  "description": "Plateforme SaaS B2B de monitoring continu de validité et conformité des certifications fournisseurs (GOTS, FSC, Ecocert, OEKO-TEX, Fairtrade, EUDR).",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "scope": "/",
+  "id": "/",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

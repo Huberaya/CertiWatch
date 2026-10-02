@@ -44,6 +44,7 @@ export function OrderSimulatorModal({
   const [showPayload, setShowPayload] = useState(false);
   const [derogationReason, setDerogationReason] = useState('');
   const [derogationGranted, setDerogationGranted] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const permissions = appStore.getActivePermissions();
   const activeUser = appStore.getActiveUser();
@@ -54,6 +55,7 @@ export function OrderSimulatorModal({
     if (e) e.preventDefault();
     setIsEvaluating(true);
     setDerogationGranted(false);
+    setFormError(null);
 
     setTimeout(() => {
       const res = appStore.evaluateOrderCompliance({
@@ -72,13 +74,14 @@ export function OrderSimulatorModal({
 
   const handleGrantDerogation = () => {
     if (!permissions.canOverrideErpBlock) {
-      alert("Votre profil n'a pas l'habilitation requise pour accorder une dérogation ERP.");
+      setFormError("Votre profil n'a pas l'habilitation requise pour accorder une dérogation ERP.");
       return;
     }
     if (!derogationReason.trim()) {
-      alert("Veuillez renseigner le motif formel de la dérogation.");
+      setFormError("Veuillez renseigner le motif formel de la dérogation.");
       return;
     }
+    setFormError(null);
 
     appStore.setSupplierErpBlock(
       selectedSupplierId,
@@ -370,7 +373,10 @@ export function OrderSimulatorModal({
                   <input
                     type="text"
                     value={derogationReason}
-                    onChange={(e) => setDerogationReason(e.target.value)}
+                    onChange={(e) => {
+                      setDerogationReason(e.target.value);
+                      if (formError) setFormError(null);
+                    }}
                     placeholder="Ex : Dérogation approuvée par Direction Achats - Fournisseur de substitution en cours de qualification..."
                     className="flex-1 p-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 text-xs focus:outline-none focus:border-amber-500"
                   />
@@ -383,6 +389,10 @@ export function OrderSimulatorModal({
                     <span>Accorder Dérogation</span>
                   </button>
                 </div>
+
+                {formError && (
+                  <p className="text-xs text-rose-400 font-semibold">{formError}</p>
+                )}
               </div>
             )}
 

@@ -52,10 +52,8 @@ export function CertificateInspectionDrawer({
   };
 
   const handleDelete = () => {
-    if (confirm(`Êtes-vous sûr de vouloir supprimer le certificat N° ${certificate.certificateNumber} ?`)) {
-      appStore.deleteCertificate(certificate.id);
-      onClose();
-    }
+    appStore.deleteCertificate(certificate.id);
+    onClose();
   };
 
   const handleTriggerErpBlock = () => {
@@ -64,7 +62,8 @@ export function CertificateInspectionDrawer({
       'BLOCKED',
       `Certificat ${certificate.standardLabel} N° ${certificate.certificateNumber} non conforme ou révoqué.`
     );
-    alert(`Blocage ERP déclenché pour le fournisseur ${certificate.supplierName}.`);
+    setVerifySuccessMsg(`Blocage ERP déclenché pour ${certificate.supplierName}.`);
+    setTimeout(() => setVerifySuccessMsg(null), 3000);
   };
 
   return (

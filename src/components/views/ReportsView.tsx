@@ -104,9 +104,7 @@ export function ReportsView() {
   };
 
   const handleDeletePlot = (plotId: string) => {
-    if (confirm('Êtes-vous sûr de vouloir supprimer cette déclaration de parcelle EUDR ?')) {
-      appStore.deleteEudrPlot(plotId);
-    }
+    appStore.deleteEudrPlot(plotId);
   };
 
   const handleOpenPortalForSupplier = (sId: string) => {

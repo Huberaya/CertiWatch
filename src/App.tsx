@@ -11,8 +11,14 @@ import { MatrixView } from './components/views/MatrixView';
 import { IntegrationsView } from './components/views/IntegrationsView';
 import { AuditTrailView } from './components/views/AuditTrailView';
 import { ReportsView } from './components/views/ReportsView';
+import { CarbonScope3View } from './components/views/CarbonScope3View';
+import { CsdddDueDiligenceView } from './components/views/CsdddDueDiligenceView';
+import { DigitalProductPassportView } from './components/views/DigitalProductPassportView';
+import { PredictiveRiskView } from './components/views/PredictiveRiskView';
+import { SecuritySovereigntyView } from './components/views/SecuritySovereigntyView';
 import { CopilotView } from './components/views/CopilotView';
 import { ComplianceSecurityView } from './components/views/ComplianceSecurityView';
+import { BillingView } from './components/views/BillingView';
 import { SettingsView } from './components/views/SettingsView';
 import { OfflineIndicator } from './components/pwa/OfflineIndicator';
 
@@ -51,8 +57,14 @@ export default function App() {
     integrations: 'Intégrations ERP & Blocage Commandes',
     audit: 'Journal d’Audit Trail',
     reports: 'Rapports Réglementaires CSRD, Conformité EUDR & Packs d’Audit',
+    carbon: 'Calcul d’Empreinte Carbone Scope 3 & Trajectoire Net-Zero (CSRD ESRS E1)',
+    csddd: 'Devoir de Vigilance CSDDD & Portail Fournisseur Collaboratif',
+    dpp: 'Passeport Digital des Produits (DPP), Règlement ESPR & GS1 Digital Link',
+    risks: 'IA Prédictive des Risques Supply Chain & Stress-Testing',
+    secops: 'Souveraineté SecNumCloud, Directive NIS 2 & Coffre-Fort SAE (NF Z42-013)',
     copilot: 'Copilot d’IA Décisionnelle & Intelligence Achats',
     compliance: 'Mode PWA Déconnecté, RGPD & Sécurité SOC 2 Type II',
+    billing: 'Facturation B2B, Stripe Billing & Quotas d’Abonnement',
     settings: 'Paramètres & Quotas Multi-Tenant',
   };
 
@@ -139,11 +151,23 @@ export default function App() {
 
             {activeTab === 'reports' && <ReportsView />}
 
+            {activeTab === 'carbon' && <CarbonScope3View />}
+
+            {activeTab === 'csddd' && <CsdddDueDiligenceView />}
+
+            {activeTab === 'dpp' && <DigitalProductPassportView />}
+
+            {activeTab === 'risks' && <PredictiveRiskView />}
+
+            {activeTab === 'secops' && <SecuritySovereigntyView />}
+
             {activeTab === 'copilot' && (
               <CopilotView onNavigateTab={(tab) => setActiveTab(tab)} />
             )}
 
             {activeTab === 'compliance' && <ComplianceSecurityView />}
+
+            {activeTab === 'billing' && <BillingView />}
 
             {activeTab === 'settings' && <SettingsView />}
           </div>

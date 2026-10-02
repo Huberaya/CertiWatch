@@ -107,9 +107,7 @@ export function IntegrationsView({ suppliers, certificates }: IntegrationsViewPr
   };
 
   const handleDeleteWebhook = (id: string) => {
-    if (confirm('Supprimer ce webhook sortant ?')) {
-      appStore.deleteWebhook(id);
-    }
+    appStore.deleteWebhook(id);
   };
 
   const handleOpenSimulator = (epId?: string) => {

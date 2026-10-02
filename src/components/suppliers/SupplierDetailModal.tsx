@@ -111,19 +111,23 @@ export function SupplierDetailModal({
     });
   };
 
+  const [erpBlockError, setErpBlockError] = useState<string | null>(null);
+
   const handleToggleErpBlock = (newStatus: ErpBlockStatus) => {
+    setErpBlockError(null);
+
     if (!permissions.canOverrideErpBlock) {
-      alert("Votre rôle n'a pas les permissions requises pour modifier le blocage ERP.");
+      setErpBlockError("Votre rôle n'a pas les permissions requises pour modifier le blocage ERP.");
       return;
     }
 
     if (newStatus === 'BLOCKED' && !erpBlockReason) {
-      alert('Veuillez renseigner un motif de blocage obligatoire.');
+      setErpBlockError('Veuillez renseigner un motif de blocage obligatoire.');
       return;
     }
 
     if (newStatus === 'TEMPORARY_DEROGATION' && !derogationJustification) {
-      alert('Veuillez renseigner une justification pour la dérogation temporaire.');
+      setErpBlockError('Veuillez renseigner une justification pour la dérogation temporaire.');
       return;
     }
 
@@ -894,6 +898,12 @@ export function SupplierDetailModal({
                 <h4 className="font-bold text-slate-200 text-xs uppercase tracking-wider">
                   Pilotage du Blocage d'Achat (SAP / Oracle)
                 </h4>
+
+                {erpBlockError && (
+                  <p className="p-2.5 rounded-lg bg-red-950/40 border border-red-500/30 text-red-300 text-xs font-semibold">
+                    {erpBlockError}
+                  </p>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Immediate Block */}

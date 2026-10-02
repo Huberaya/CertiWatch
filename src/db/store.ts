@@ -2442,6 +2442,20 @@ class Store {
     return this.state.soc2Controls || SEED_SOC2_CONTROLS;
   }
 
+  public getDatabaseSnapshot() {
+    return {
+      tenants: this.state.tenants || [],
+      users: this.state.users || [],
+      suppliers: this.state.suppliers || [],
+      certificates: this.state.certificates || [],
+      auditLogs: this.state.auditLogs || [],
+      matrixRules: this.state.matrixRules || [],
+      eudrDeclarations: this.state.eudrPlots || [],
+      webhookEndpoints: this.state.webhooks || [],
+      fieldAudits: this.state.fieldAudits || [],
+    };
+  }
+
   public resetDemoData() {
     this.state = {
       tenants: SEED_TENANTS,

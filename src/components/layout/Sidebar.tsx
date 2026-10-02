@@ -15,6 +15,12 @@ import {
   Award,
   Bot,
   Smartphone,
+  CreditCard,
+  Leaf,
+  Scale,
+  QrCode,
+  Radar,
+  Shield,
 } from 'lucide-react';
 import { appStore } from '../../db/store';
 
@@ -28,8 +34,14 @@ export type NavigationTab =
   | 'integrations'
   | 'audit'
   | 'reports'
+  | 'carbon'
+  | 'csddd'
+  | 'dpp'
+  | 'risks'
+  | 'secops'
   | 'copilot'
   | 'compliance'
+  | 'billing'
   | 'settings';
 
 interface SidebarProps {
@@ -109,6 +121,36 @@ export function Sidebar({
       description: 'EUDR & Packs CAC',
     },
     {
+      id: 'carbon' as NavigationTab,
+      label: 'Carbone Scope 3 & Net-Zero',
+      icon: Leaf,
+      description: 'ESRS E1 & Trajectoire 1.5°C',
+    },
+    {
+      id: 'csddd' as NavigationTab,
+      label: 'Devoir de Vigilance CSDDD',
+      icon: Scale,
+      description: 'Droits humains & Whistleblowing',
+    },
+    {
+      id: 'dpp' as NavigationTab,
+      label: 'Passeport Digital DPP',
+      icon: QrCode,
+      description: 'ESPR 2024 & GS1 Digital Link',
+    },
+    {
+      id: 'risks' as NavigationTab,
+      label: 'IA Risques & Stress-Testing',
+      icon: Radar,
+      description: 'Veille météo & Altman Z-Score',
+    },
+    {
+      id: 'secops' as NavigationTab,
+      label: 'Souveraineté, NIS 2 & SAE',
+      icon: Shield,
+      description: 'SecNumCloud & NF Z42-013',
+    },
+    {
       id: 'copilot' as NavigationTab,
       label: 'Copilot IA & Décision',
       icon: Bot,
@@ -119,6 +161,12 @@ export function Sidebar({
       label: 'PWA, RGPD & SOC 2',
       icon: Smartphone,
       description: 'Audits terrain & Sécurité',
+    },
+    {
+      id: 'billing' as NavigationTab,
+      label: 'Facturation & Abonnements',
+      icon: CreditCard,
+      description: 'Stripe Billing & Quotas',
     },
     {
       id: 'settings' as NavigationTab,
@@ -151,7 +199,7 @@ export function Sidebar({
           </div>
         </div>
 
-        {/* Tenant selector banner */}
+        {/* Tenant selector banner (clickable to billing) */}
         <div className="px-3 py-3 border-b border-slate-800/80 bg-slate-950/40">
           <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5 px-2">
             <span className="font-medium text-[11px] uppercase tracking-wider text-slate-500">
@@ -161,8 +209,16 @@ export function Sidebar({
               {activeTenant.tier}
             </span>
           </div>
-          <div className="px-2 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60">
-            <div className="text-xs font-semibold text-slate-200 truncate">{activeTenant.name}</div>
+          <button
+            type="button"
+            onClick={() => onTabChange('billing')}
+            className="w-full text-left px-2 py-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-emerald-500/40 transition group"
+            title="Gérer le plan d'abonnement & les quotas Stripe"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-200 group-hover:text-emerald-300 transition truncate">{activeTenant.name}</span>
+              <CreditCard className="w-3 h-3 text-slate-500 group-hover:text-emerald-400" />
+            </div>
             <div className="flex items-center justify-between mt-1 text-[11px] text-slate-400">
               <span>{certsCount} certificats</span>
               <span className="font-mono text-emerald-400">{usagePercent}% quota</span>
@@ -175,7 +231,7 @@ export function Sidebar({
                 style={{ width: `${usagePercent}%` }}
               />
             </div>
-          </div>
+          </button>
         </div>
 
         {/* Navigation list */}

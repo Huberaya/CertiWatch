@@ -21,9 +21,19 @@ import {
   AlertTriangle,
   RotateCcw,
   CheckCircle2,
+  Database,
+  Sparkles,
+  Layers,
+  Sliders,
+  Laptop,
 } from 'lucide-react';
+import { useCertiWatchClerk } from '../../lib/clerk';
+import { NeonDatabasePanel } from '../db/NeonDatabasePanel';
+import { EnterpriseIamPanel } from '../iam/EnterpriseIamPanel';
+import { BillingView } from './BillingView';
 
 export function SettingsView() {
+  const [mainTab, setMainTab] = useState<'GENERAL' | 'NEON_DB' | 'ENTERPRISE_IAM' | 'BILLING'>('GENERAL');
   const activeTenant = appStore.getActiveTenant();
   const activeUser = appStore.getActiveUser();
   const allTenants = appStore.getState().tenants;
@@ -34,6 +44,11 @@ export function SettingsView() {
 
   const costPerCert = activeTenant.pricePerCertMonthly || 2.2;
   const estimatedMonthlyCost = Math.round(certsCount * costPerCert);
+
+  // Clerk & Neon state
+  const { isConfigured: isClerkActive, openConfigModal } = useCertiWatchClerk();
+  const [neonHealth, setNeonHealth] = useState<any>(null);
+  const [isCheckingNeon, setIsCheckingNeon] = useState(false);
 
   // API Key & Webhook state
   const [apiKey, setApiKey] = useState('cw_live_sk_8f92a10b4829ec7193bd720194aa82');
@@ -51,10 +66,8 @@ export function SettingsView() {
   };
 
   const handleRotateKey = () => {
-    if (confirm('Êtes-vous sûr de vouloir régénérer cette clé d’API ? L’ancienne clé sera immédiatement révoquée.')) {
-      const newKey = 'cw_live_sk_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      setApiKey(newKey);
-    }
+    const newKey = 'cw_live_sk_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    setApiKey(newKey);
   };
 
   const handleTestWebhookPing = () => {
@@ -67,11 +80,21 @@ export function SettingsView() {
     }, 700);
   };
 
-  const handleResetData = () => {
-    if (confirm('Attention : Voulez-vous réinitialiser toutes les données de démonstration à leur état initial ?')) {
-      appStore.resetDemoData();
-      alert('Toutes les données ont été réinitialisées.');
+  const handleCheckNeon = async () => {
+    setIsCheckingNeon(true);
+    try {
+      const res = await fetch('/api/neon/health');
+      const data = await res.json();
+      setNeonHealth(data);
+    } catch (err: any) {
+      setNeonHealth({ connected: false, reason: err.message });
+    } finally {
+      setIsCheckingNeon(false);
     }
+  };
+
+  const handleResetData = () => {
+    appStore.resetDemoData();
   };
 
   return (
@@ -97,6 +120,72 @@ export function SettingsView() {
         </button>
       </div>
 
+      {/* Settings Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto text-xs font-semibold">
+        <button
+          type="button"
+          onClick={() => setMainTab('GENERAL')}
+          className={`px-4 py-2 rounded-xl transition-colors flex items-center gap-2 ${
+            mainTab === 'GENERAL'
+              ? 'bg-slate-800 text-white border border-slate-700 shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-slate-900'
+          }`}
+        >
+          <Sliders className="w-4 h-4 text-teal-400" />
+          <span>Général &amp; Multi-Tenant</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMainTab('NEON_DB')}
+          className={`px-4 py-2 rounded-xl transition-colors flex items-center gap-2 ${
+            mainTab === 'NEON_DB'
+              ? 'bg-emerald-600 text-slate-950 font-bold shadow-sm'
+              : 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/30 border border-emerald-500/20'
+          }`}
+        >
+          <Database className="w-4 h-4" />
+          <span>Chantier 11 : Neon PostgreSQL</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMainTab('ENTERPRISE_IAM')}
+          className={`px-4 py-2 rounded-xl transition-colors flex items-center gap-2 ${
+            mainTab === 'ENTERPRISE_IAM'
+              ? 'bg-violet-600 text-white font-bold shadow-sm'
+              : 'text-violet-400 hover:text-violet-300 hover:bg-violet-950/30 border border-violet-500/20'
+          }`}
+        >
+          <Shield className="w-4 h-4" />
+          <span>Chantier 12 : Enterprise IAM &amp; SSO (Clerk)</span>
+          <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMainTab('BILLING')}
+          className={`px-4 py-2 rounded-xl transition-colors flex items-center gap-2 ${
+            mainTab === 'BILLING'
+              ? 'bg-emerald-600 text-slate-950 font-bold shadow-sm'
+              : 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/30 border border-emerald-500/20'
+          }`}
+        >
+          <CreditCard className="w-4 h-4" />
+          <span>Chantier 13 : Stripe Billing &amp; Quotas</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+        </button>
+      </div>
+
+      {mainTab === 'NEON_DB' && <NeonDatabasePanel />}
+
+      {mainTab === 'ENTERPRISE_IAM' && <EnterpriseIamPanel />}
+
+      {mainTab === 'BILLING' && <BillingView />}
+
+      {mainTab === 'GENERAL' && (
+        <>
       {/* Tenant Switcher & Quotas */}
       <div className="p-5 rounded-xl border border-slate-800 bg-slate-900/90 shadow-xl space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
@@ -354,6 +443,129 @@ export function SettingsView() {
         </div>
       </div>
 
+      {/* Cloud Stack: Neon Serverless PostgreSQL & Clerk IAM */}
+      <div className="p-5 rounded-xl border border-violet-500/20 bg-slate-900/90 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400">
+              <Database className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-white">Stack Cloud Production : Neon &amp; Clerk</h3>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                  Drizzle ORM &bull; Multi-Tenant
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Persistance relationnelle serverless (Neon PostgreSQL) et gestion des identités d'entreprise (Clerk IAM / SAML SSO).
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={openConfigModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 text-xs font-semibold transition"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+            <span>Guide d'activation des clés</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          {/* Neon PostgreSQL Component */}
+          <div className="p-4 rounded-xl bg-slate-950/80 border border-emerald-500/20 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                <Database className="w-4 h-4" />
+                <span>Neon PostgreSQL (Drizzle ORM)</span>
+              </span>
+              <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono">
+                9 Tables Générées
+              </span>
+            </div>
+
+            <p className="text-slate-300 text-[11px] leading-relaxed">
+              Tables configurées : <code>tenants</code>, <code>users</code>, <code>suppliers</code>, <code>certificates</code>, <code>audit_logs</code>, <code>matrix_rules</code>, <code>eudr_declarations</code>, <code>webhook_endpoints</code>, <code>field_audits</code>.
+            </p>
+
+            <div className="p-2.5 rounded-lg bg-slate-900 font-mono text-[11px] text-slate-400">
+              <code>DATABASE_URL=postgresql://[neon-endpoint]/neondb</code>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-slate-400">
+                Commande de push Drizzle : <code className="text-emerald-400">npx drizzle-kit push</code>
+              </span>
+              <button
+                type="button"
+                onClick={handleCheckNeon}
+                disabled={isCheckingNeon}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-semibold transition flex items-center gap-1"
+              >
+                <RefreshCw className={`w-3 h-3 ${isCheckingNeon ? 'animate-spin text-emerald-400' : ''}`} />
+                <span>{isCheckingNeon ? 'Test...' : 'Tester Neon'}</span>
+              </button>
+            </div>
+
+            {neonHealth && (
+              <div
+                className={`p-2.5 rounded-lg border font-mono text-[11px] ${
+                  neonHealth.connected
+                    ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
+                    : 'bg-slate-900 border-slate-800 text-slate-300'
+                }`}
+              >
+                {neonHealth.connected ? (
+                  <div>
+                    ✓ Connecté à Neon ({neonHealth.database}) &bull; Latence : {neonHealth.latencyMs}ms
+                  </div>
+                ) : (
+                  <div>
+                    {neonHealth.notice || neonHealth.reason || 'Neon en attente de DATABASE_URL'}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Clerk IAM Component */}
+          <div className="p-4 rounded-xl bg-slate-950/80 border border-violet-500/20 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-violet-400 flex items-center gap-1.5">
+                <Shield className="w-4 h-4" />
+                <span>Clerk IAM &amp; Enterprise SSO</span>
+              </span>
+              <span className="px-2 py-0.5 rounded bg-violet-950 text-violet-300 border border-violet-500/30 text-[10px] font-mono">
+                {isClerkActive ? 'SSO Actif' : 'Clerk Prêt'}
+              </span>
+            </div>
+
+            <p className="text-slate-300 text-[11px] leading-relaxed">
+              Prêt pour l'authentification grand compte : Microsoft Entra (Azure AD), Google Workspace, SAML 2.0, Passkeys et sessions RBAC étanches.
+            </p>
+
+            <div className="p-2.5 rounded-lg bg-slate-900 font-mono text-[11px] text-slate-400">
+              <code>VITE_CLERK_PUBLISHABLE_KEY=pk_test_...</code>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-slate-400">
+                Fournisseurs SSO : Google, Microsoft, Okta, SAML
+              </span>
+              <button
+                type="button"
+                onClick={openConfigModal}
+                className="px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-semibold text-[11px] transition"
+              >
+                Configurer Clerk
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* RBAC Matrix Review */}
       <div className="p-5 rounded-xl border border-slate-800 bg-slate-900/90 shadow-xl space-y-4">
         <div className="flex items-center gap-2 pb-3 border-b border-slate-800">
@@ -403,6 +615,8 @@ export function SettingsView() {
           </table>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

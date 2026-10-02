@@ -82,9 +82,7 @@ export function MatrixView({ rules }: MatrixViewProps) {
   };
 
   const handleDeleteRule = (id: string, name: string) => {
-    if (confirm(`Confirmez-vous la suppression de la règle de conformité pour "${name}" ?`)) {
-      appStore.deleteMatrixRule(id);
-    }
+    appStore.deleteMatrixRule(id);
   };
 
   return (

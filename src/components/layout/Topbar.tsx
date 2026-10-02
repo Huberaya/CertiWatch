@@ -12,6 +12,7 @@ import {
 import { appStore } from '../../db/store';
 import { UserRole } from '../../types/tenant';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
+import { ClerkAuthHeaderWidget } from '../../lib/clerk';
 
 interface TopbarProps {
   currentTabName: string;
@@ -31,6 +32,7 @@ export function Topbar({
   const allTenants = appStore.getState().tenants;
   const [showTenantDropdown, setShowTenantDropdown] = useState(false);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const roles: { role: UserRole; label: string; desc: string }[] = [
     { role: 'ADMIN', label: 'Administrateur', desc: 'Contrôle complet & configuration SaaS' },
@@ -161,6 +163,9 @@ export function Topbar({
         {/* PWA Install Button */}
         <PWAInstallButton />
 
+        {/* Clerk Auth & Enterprise IAM */}
+        <ClerkAuthHeaderWidget />
+
         {/* User preview */}
         <div className="flex items-center gap-2 pl-2 border-l border-slate-800 text-xs">
           <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-300 font-bold text-xs">
@@ -173,17 +178,45 @@ export function Topbar({
         </div>
 
         {/* Reset Demo button */}
-        <button
-          onClick={() => {
-            if (confirm('Réinitialiser la base de démonstration CertiWatch avec les données officielles de test ?')) {
-              appStore.resetDemoData();
-            }
-          }}
-          title="Réinitialiser le jeu de données de test"
-          className="p-2 text-slate-500 hover:text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
-        >
-          <RotateCcw className="w-4 h-4" />
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setShowResetConfirm((v) => !v)}
+            title="Réinitialiser les données de démonstration"
+            className="p-2 text-slate-500 hover:text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+
+          {showResetConfirm && (
+            <div className="absolute right-0 top-full mt-2 w-72 p-3 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 animate-fade-in space-y-2 text-xs">
+              <p className="text-slate-200 font-semibold">
+                Réinitialiser la base de données de test CertiWatch ?
+              </p>
+              <p className="text-slate-400 text-[11px]">
+                Restaure les tiers, certificats officiels et alertes de démonstration par défaut.
+              </p>
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowResetConfirm(false)}
+                  className="px-2.5 py-1 text-slate-400 hover:text-white rounded"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    appStore.resetDemoData();
+                    setShowResetConfirm(false);
+                  }}
+                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded"
+                >
+                  Confirmer
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );
