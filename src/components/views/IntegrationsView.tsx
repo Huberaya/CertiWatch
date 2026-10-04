@@ -21,10 +21,18 @@ import {
   Layers,
   Sparkles,
   ExternalLink,
+  Server,
+  Workflow,
+  Network,
+  History,
 } from 'lucide-react';
 import { appStore } from '../../db/store';
 import { WebhookModal } from '../webhooks/WebhookModal';
 import { WebhookSimulatorModal } from '../webhooks/WebhookSimulatorModal';
+import { SapODataPanel } from '../connectors/SapODataPanel';
+import { CoupaPanel } from '../connectors/CoupaPanel';
+import { CelonisPanel } from '../connectors/CelonisPanel';
+import { ErpSyncLogsPanel } from '../connectors/ErpSyncLogsPanel';
 import {
   WebhookEndpoint,
   WebhookDeliveryLog,
@@ -39,7 +47,7 @@ interface IntegrationsViewProps {
 }
 
 export function IntegrationsView({ suppliers, certificates }: IntegrationsViewProps) {
-  const [activeTab, setActiveTab] = useState<'simulator' | 'webhooks' | 'dlq' | 'api_docs'>('simulator');
+  const [activeTab, setActiveTab] = useState<'sap' | 'coupa' | 'celonis' | 'simulator' | 'webhooks' | 'dlq' | 'sync_logs' | 'api_docs'>('sap');
 
   // Modals state
   const [isWebhookModalOpen, setIsWebhookModalOpen] = useState(false);
@@ -198,61 +206,119 @@ export function IntegrationsView({ suppliers, certificates }: IntegrationsViewPr
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+      <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setActiveTab('sap')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer ${
+            activeTab === 'sap'
+              ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+          }`}
+        >
+          <Server className="w-4 h-4 text-blue-400" />
+          1. SAP S/4HANA (OData)
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('coupa')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer ${
+            activeTab === 'coupa'
+              ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+          }`}
+        >
+          <Workflow className="w-4 h-4 text-orange-400" />
+          2. Coupa Procurement
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('celonis')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer ${
+            activeTab === 'celonis'
+              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+          }`}
+        >
+          <Network className="w-4 h-4 text-cyan-400" />
+          3. Celonis EMS &amp; Ivalua
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('sync_logs')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer ${
+            activeTab === 'sync_logs'
+              ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+          }`}
+        >
+          <History className="w-4 h-4 text-indigo-400" />
+          4. Flux Bidirectionnels ERP
+        </button>
+
         <button
           type="button"
           onClick={() => setActiveTab('simulator')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer ${
             activeTab === 'simulator'
               ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
           <Cpu className="w-4 h-4" />
-          1. Gating Commandes & Simulateur ERP
+          5. Gating Commandes PO
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('webhooks')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer ${
             activeTab === 'webhooks'
               ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
           <Radio className="w-4 h-4" />
-          2. Webhooks Sortants & EventBus ({webhooks.length})
+          6. Webhooks Sortants ({webhooks.length})
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('dlq')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer ${
             activeTab === 'dlq'
               ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
           <RotateCw className="w-4 h-4" />
-          3. File d'Attente DLQ ({pendingDlqCount} en attente)
+          7. File d'Attente DLQ ({pendingDlqCount})
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('api_docs')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer ${
             activeTab === 'api_docs'
               ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
           <Terminal className="w-4 h-4" />
-          4. Console Développeur & API OpenAPI
+          8. Console OpenAPI
         </button>
       </div>
 
-      {/* Tab 1 : ERP Simulator */}
+      {/* Panels */}
+      {activeTab === 'sap' && <SapODataPanel />}
+      {activeTab === 'coupa' && <CoupaPanel />}
+      {activeTab === 'celonis' && <CelonisPanel />}
+      {activeTab === 'sync_logs' && <ErpSyncLogsPanel />}
+
+      {/* Tab : ERP Simulator */}
       {activeTab === 'simulator' && (
         <div className="space-y-6">
           <div className="p-5 rounded-2xl border border-indigo-900/40 bg-gradient-to-b from-indigo-950/20 via-slate-900 to-slate-900 shadow-xl space-y-4">

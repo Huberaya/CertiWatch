@@ -19,17 +19,19 @@ import {
   ExternalLink,
   ChevronRight,
   ClipboardCheck,
+  Terminal,
 } from 'lucide-react';
 import { appStore } from '../../db/store';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
 import { FieldAuditModal } from '../compliance/FieldAuditModal';
 import { GdprErasureModal } from '../compliance/GdprErasureModal';
+import { CiCdPipelinePanel } from '../compliance/CiCdPipelinePanel';
 import { FieldAuditReport, GdprDataSubject, Soc2Control } from '../../types/compliance';
 
 export function ComplianceSecurityView() {
   const isOnline = useOnlineStatus();
-  const [activeTab, setActiveTab] = useState<'pwa_audits' | 'gdpr' | 'soc2'>('pwa_audits');
+  const [activeTab, setActiveTab] = useState<'pwa_audits' | 'gdpr' | 'soc2' | 'cicd_tests'>('pwa_audits');
 
   // Modals state
   const [isFieldAuditModalOpen, setIsFieldAuditModalOpen] = useState(false);
@@ -169,6 +171,19 @@ export function ComplianceSecurityView() {
         >
           <ShieldCheck className="w-4 h-4" />
           3. Contrôles SOC 2 Type II (100% Conforme)
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('cicd_tests')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 ${
+            activeTab === 'cicd_tests'
+              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+          }`}
+        >
+          <Terminal className="w-4 h-4" />
+          4. Pipeline CI/CD & Tests Automatisés (25/25)
         </button>
       </div>
 
@@ -492,6 +507,9 @@ export function ComplianceSecurityView() {
           </div>
         </div>
       )}
+
+      {/* Tab 4 : CI/CD Pipeline & Automated Tests */}
+      {activeTab === 'cicd_tests' && <CiCdPipelinePanel />}
 
       {/* Modals */}
       <FieldAuditModal

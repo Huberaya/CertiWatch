@@ -60,15 +60,27 @@ export function verifyAuditChainIntegrity(logs: AuditLogEntry[]): AuditChainVeri
     };
   }
 
-  // Logs are ordered newest to oldest in UI; reverse to verify chronologically from genesis
-  const chronological = [...logs].reverse();
+  // Detect order: if already chronological (oldest to newest), keep it; otherwise reverse
+  const isAlreadyChronological =
+    logs.length <= 1 ||
+    new Date(logs[0].timestamp).getTime() <= new Date(logs[logs.length - 1].timestamp).getTime();
+  const chronological = isAlreadyChronological ? [...logs] : [...logs].reverse();
   const tamperedIds: string[] = [];
 
   for (let i = 0; i < chronological.length; i++) {
     const current = chronological[i];
     const prev = i > 0 ? chronological[i - 1] : null;
 
+    // 1. Check parent hash linkage
     if (prev && current.previousHash !== prev.hash) {
+      tamperedIds.push(current.id);
+      continue;
+    }
+
+    // 2. Check payload integrity (recalculate hash from block attributes)
+    const expectedPayload = `${current.tenantId}|${current.timestamp}|${current.actionCategory}|${current.entityId}|${current.previousHash}|${current.details}`;
+    const calculatedHash = computeSha256Digest(expectedPayload);
+    if (current.hash && current.hash !== calculatedHash) {
       tamperedIds.push(current.id);
     }
   }

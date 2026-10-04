@@ -1,0 +1,71 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: certiwatch-enterprise-app
+  namespace: '531644593121'
+  labels:
+    cloud.googleapis.com/location: europe-west2
+    environment: production
+    app.kubernetes.io/name: certiwatch
+    compliance: secnumcloud-ready
+  annotations:
+    run.googleapis.com/ingress: all
+    run.googleapis.com/description: 'CertiWatch B2B SaaS Enterprise Platform'
+    run.googleapis.com/custom-domains: 'app.certiwatch.io,api.certiwatch.io'
+spec:
+  template:
+    metadata:
+      annotations:
+        # Scaling parameters: scale-to-zero free-tier or min 1 warm instance for enterprise SLAs
+        autoscaling.knative.dev/minScale: '1'
+        autoscaling.knative.dev/maxScale: '100'
+        # Startup CPU Boost to eliminate cold start latency
+        run.googleapis.com/startup-cpu-boost: 'true'
+        # CPU always allocated for background sync & Webhooks
+        run.googleapis.com/cpu-throttling: 'false'
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+        - image: europe-west2-docker.pkg.dev/certiwatch-prod/app/server:2c853f9
+          ports:
+            - name: http1
+              containerPort: 3000
+          resources:
+            limits:
+              cpu: '2000m'
+              memory: '1Gi'
+          env:
+            - name: NODE_ENV
+              value: 'production'
+            - name: PORT
+              value: '3000'
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: certiwatch-neon-db-url
+                  key: latest
+            - name: CLERK_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: certiwatch-clerk-secret
+                  key: latest
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: certiwatch-gemini-key
+                  key: latest
+          startupProbe:
+            httpGet:
+              path: /api/neon/health
+              port: 3000
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/neon/health
+              port: 3000
+            periodSeconds: 15
+            timeoutSeconds: 3

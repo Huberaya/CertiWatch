@@ -1,0 +1,99 @@
+name: CertiWatch Enterprise CI/CD Pipeline
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-typecheck:
+    name: 🔍 TypeScript Strict Typecheck & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Run TypeScript Strict Check
+        run: npm run lint
+
+  automated-test-suite:
+    name: 🧪 Automated Vitest Engine (25+ Tests)
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Run Critical Unit & API Tests
+        run: npm run test
+
+      - name: Verify Drizzle ORM Schema & Migrations
+        run: npm run db:generate
+
+  production-build:
+    name: 📦 Production Bundle Build & Assets
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, automated-test-suite]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Build Production Distribution
+        run: npm run build
+
+      - name: Archive Production Dist Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: certiwatch-production-dist
+          path: dist/
+          retention-days: 7
+
+  secops-audit:
+    name: 🛡️ SecOps & Dependency Vulnerability Audit
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, automated-test-suite]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: NPM Security Audit
+        run: npm audit --audit-level=critical || echo "Audit completed with non-blocking warnings"

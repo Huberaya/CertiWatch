@@ -36,6 +36,7 @@ import {
   GdprDataSubject,
   Soc2Control,
 } from '../types/compliance';
+import { derogationService } from '../services/derogationService';
 import {
   SEED_TENANTS,
   SEED_USERS,
@@ -99,20 +100,22 @@ class Store {
 
   private loadInitialState(): AppStoreState {
     try {
-      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}state`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.tenants && parsed.suppliers && parsed.certificates) {
-          if (!parsed.eudrPlots) parsed.eudrPlots = SEED_EUDR_PLOTS;
-          if (!parsed.generatedAuditPacks) parsed.generatedAuditPacks = SEED_AUDIT_PACKS;
-          if (!parsed.supplierPortalSubmissions) parsed.supplierPortalSubmissions = {};
-          if (!parsed.webhooks) parsed.webhooks = SEED_WEBHOOK_ENDPOINTS;
-          if (!parsed.webhookLogs) parsed.webhookLogs = SEED_WEBHOOK_DELIVERIES;
-          if (!parsed.deadLetterQueue) parsed.deadLetterQueue = SEED_DLQ_ITEMS;
-          if (!parsed.fieldAudits) parsed.fieldAudits = SEED_FIELD_AUDITS;
-          if (!parsed.gdprSubjects) parsed.gdprSubjects = SEED_GDPR_SUBJECTS;
-          if (!parsed.soc2Controls) parsed.soc2Controls = SEED_SOC2_CONTROLS;
-          return parsed;
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}state`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.tenants && parsed.suppliers && parsed.certificates) {
+            if (!parsed.eudrPlots) parsed.eudrPlots = SEED_EUDR_PLOTS;
+            if (!parsed.generatedAuditPacks) parsed.generatedAuditPacks = SEED_AUDIT_PACKS;
+            if (!parsed.supplierPortalSubmissions) parsed.supplierPortalSubmissions = {};
+            if (!parsed.webhooks) parsed.webhooks = SEED_WEBHOOK_ENDPOINTS;
+            if (!parsed.webhookLogs) parsed.webhookLogs = SEED_WEBHOOK_DELIVERIES;
+            if (!parsed.deadLetterQueue) parsed.deadLetterQueue = SEED_DLQ_ITEMS;
+            if (!parsed.fieldAudits) parsed.fieldAudits = SEED_FIELD_AUDITS;
+            if (!parsed.gdprSubjects) parsed.gdprSubjects = SEED_GDPR_SUBJECTS;
+            if (!parsed.soc2Controls) parsed.soc2Controls = SEED_SOC2_CONTROLS;
+            return parsed;
+          }
         }
       }
     } catch (e) {
@@ -148,7 +151,9 @@ class Store {
 
   private saveState() {
     try {
-      localStorage.setItem(`${STORAGE_KEY_PREFIX}state`, JSON.stringify(this.state));
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        localStorage.setItem(`${STORAGE_KEY_PREFIX}state`, JSON.stringify(this.state));
+      }
     } catch (e) {
       console.error('Error saving state to localStorage', e);
     }
@@ -1399,6 +1404,23 @@ class Store {
       if (validCerts.length === 0 && supplierCerts.length > 0) {
         if (decision !== 'BLOCKED') decision = 'REQUIRES_APPROVAL';
         reasons.push('Le fournisseur n’a aucun certificat valide actuellement actif.');
+      }
+    }
+
+    // --- Chantier D: Application des Dérogations Qualité eIDAS / RGS** ---
+    if (decision !== 'ALLOWED') {
+      const stdToCheck = missingStandards[0] || 'GENERIC';
+      const coverage = derogationService.checkOrderCoverage(
+        supplier.id,
+        stdToCheck,
+        params.productCategory,
+        params.amountEur
+      );
+      if (coverage.covered && coverage.derogation) {
+        decision = 'ALLOWED';
+        reasons.push(
+          `DÉROGATION QUALITÉ VALIDÉE : Couverte par ${coverage.derogation.id} (Plafond restant: ${coverage.remainingAllowanceEur.toLocaleString()} €) sous visa eIDAS / RGS**.`
+        );
       }
     }
 

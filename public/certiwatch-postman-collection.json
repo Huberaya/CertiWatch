@@ -1,0 +1,96 @@
+{
+  "info": {
+    "name": "CertiWatch Enterprise B2B API Collection",
+    "description": "Postman Collection officielle v2.1 pour l'intégration des flux achats, certificats et webhooks CertiWatch.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://api.certiwatch.io/v1",
+      "type": "string"
+    },
+    {
+      "key": "apiKey",
+      "value": "cw_live_sk_8f92a10b4829ec7193bd720194aa82",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Achats & Blocage ERP",
+      "item": [
+        {
+          "name": "Simuler & Valider un Bon de Commande PO",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-API-Key", "value": "{{apiKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"poNumber\": \"PO-2026-SAP-98124\",\n  \"supplierId\": \"sup-1\",\n  \"productCategory\": \"Textiles Biologiques & Coton\",\n  \"orderAmountEur\": 142500,\n  \"requiredStandards\": [\"GOTS\", \"OEKO-TEX\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/matrix/simulate",
+              "host": ["{{baseUrl}}"],
+              "path": ["matrix", "simulate"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Fournisseurs",
+      "item": [
+        {
+          "name": "Lister les Fournisseurs & Risques",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{apiKey}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/suppliers",
+              "host": ["{{baseUrl}}"],
+              "path": ["suppliers"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Certificats & Validité",
+      "item": [
+        {
+          "name": "Vérifier la validité officielle d'un Certificat",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{apiKey}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/certificates/cert-1/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["certificates", "cert-1", "verify"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Audit & Chaîne Cryptographique",
+      "item": [
+        {
+          "name": "Vérifier l'intégrité de la chaîne Merkle",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{apiKey}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/audit/verify-chain",
+              "host": ["{{baseUrl}}"],
+              "path": ["audit", "verify-chain"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

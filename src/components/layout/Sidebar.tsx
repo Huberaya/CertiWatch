@@ -21,6 +21,9 @@ import {
   QrCode,
   Radar,
   Shield,
+  Terminal,
+  Activity,
+  FileCheck,
 } from 'lucide-react';
 import { appStore } from '../../db/store';
 
@@ -31,6 +34,7 @@ export type NavigationTab =
   | 'alerts'
   | 'connectors'
   | 'matrix'
+  | 'derogations'
   | 'integrations'
   | 'audit'
   | 'reports'
@@ -42,6 +46,8 @@ export type NavigationTab =
   | 'copilot'
   | 'compliance'
   | 'billing'
+  | 'devportal'
+  | 'observability'
   | 'settings';
 
 interface SidebarProps {
@@ -101,6 +107,12 @@ export function Sidebar({
       label: 'Matrice de Conformité',
       icon: Grid3X3,
       description: 'Produits × Standards',
+    },
+    {
+      id: 'derogations' as NavigationTab,
+      label: 'Dérogations Qualité',
+      icon: FileCheck,
+      description: 'Workflows eIDAS / RGS**',
     },
     {
       id: 'integrations' as NavigationTab,
@@ -167,6 +179,18 @@ export function Sidebar({
       label: 'Facturation & Abonnements',
       icon: CreditCard,
       description: 'Stripe Billing & Quotas',
+    },
+    {
+      id: 'devportal' as NavigationTab,
+      label: 'Portail Développeur',
+      icon: Terminal,
+      description: 'OpenAPI 3.0 & Sandbox ERP',
+    },
+    {
+      id: 'observability' as NavigationTab,
+      label: 'Observabilité & APM',
+      icon: Activity,
+      description: 'Prometheus & SRE Alerting',
     },
     {
       id: 'settings' as NavigationTab,

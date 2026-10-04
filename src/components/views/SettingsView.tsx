@@ -26,14 +26,16 @@ import {
   Layers,
   Sliders,
   Laptop,
+  Server,
 } from 'lucide-react';
 import { useCertiWatchClerk } from '../../lib/clerk';
 import { NeonDatabasePanel } from '../db/NeonDatabasePanel';
 import { EnterpriseIamPanel } from '../iam/EnterpriseIamPanel';
 import { BillingView } from './BillingView';
+import { ProductionInfraPanel } from '../infra/ProductionInfraPanel';
 
 export function SettingsView() {
-  const [mainTab, setMainTab] = useState<'GENERAL' | 'NEON_DB' | 'ENTERPRISE_IAM' | 'BILLING'>('GENERAL');
+  const [mainTab, setMainTab] = useState<'GENERAL' | 'NEON_DB' | 'ENTERPRISE_IAM' | 'BILLING' | 'INFRA_DNS'>('GENERAL');
   const activeTenant = appStore.getActiveTenant();
   const activeUser = appStore.getActiveUser();
   const allTenants = appStore.getState().tenants;
@@ -176,6 +178,20 @@ export function SettingsView() {
           <span>Chantier 13 : Stripe Billing &amp; Quotas</span>
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
         </button>
+
+        <button
+          type="button"
+          onClick={() => setMainTab('INFRA_DNS')}
+          className={`px-4 py-2 rounded-xl transition-colors flex items-center gap-2 ${
+            mainTab === 'INFRA_DNS'
+              ? 'bg-indigo-600 text-white font-bold shadow-sm'
+              : 'text-indigo-400 hover:text-indigo-300 hover:bg-indigo-950/30 border border-indigo-500/20'
+          }`}
+        >
+          <Server className="w-4 h-4" />
+          <span>Infra Prod, Domaine &amp; DNS</span>
+          <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+        </button>
       </div>
 
       {mainTab === 'NEON_DB' && <NeonDatabasePanel />}
@@ -183,6 +199,8 @@ export function SettingsView() {
       {mainTab === 'ENTERPRISE_IAM' && <EnterpriseIamPanel />}
 
       {mainTab === 'BILLING' && <BillingView />}
+
+      {mainTab === 'INFRA_DNS' && <ProductionInfraPanel />}
 
       {mainTab === 'GENERAL' && (
         <>

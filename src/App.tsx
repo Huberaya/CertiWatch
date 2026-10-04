@@ -20,6 +20,8 @@ import { CopilotView } from './components/views/CopilotView';
 import { ComplianceSecurityView } from './components/views/ComplianceSecurityView';
 import { BillingView } from './components/views/BillingView';
 import { SettingsView } from './components/views/SettingsView';
+import { DeveloperPortalView } from './components/devportal/DeveloperPortalView';
+import { ObservabilityApmPanel } from './components/observability/ObservabilityApmPanel';
 import { OfflineIndicator } from './components/pwa/OfflineIndicator';
 
 export default function App() {
@@ -65,6 +67,8 @@ export default function App() {
     copilot: 'Copilot d’IA Décisionnelle & Intelligence Achats',
     compliance: 'Mode PWA Déconnecté, RGPD & Sécurité SOC 2 Type II',
     billing: 'Facturation B2B, Stripe Billing & Quotas d’Abonnement',
+    devportal: 'Portail Développeur Public & Spécification OpenAPI 3.0',
+    observability: 'Observabilité, Métriques APM & Alerting SRE',
     settings: 'Paramètres & Quotas Multi-Tenant',
   };
 
@@ -168,6 +172,10 @@ export default function App() {
             {activeTab === 'compliance' && <ComplianceSecurityView />}
 
             {activeTab === 'billing' && <BillingView />}
+
+            {activeTab === 'devportal' && <DeveloperPortalView />}
+
+            {activeTab === 'observability' && <ObservabilityApmPanel />}
 
             {activeTab === 'settings' && <SettingsView />}
           </div>

@@ -284,6 +284,7 @@ export async function seedNeonFromStore(storeSnapshot: {
 
   const client = await pool.connect();
   let inserted = 0;
+  const defaultTenantId = storeSnapshot.tenants?.[0]?.id || 'tenant-danone-global';
 
   try {
     await client.query('BEGIN');
@@ -305,7 +306,7 @@ export async function seedNeonFromStore(storeSnapshot: {
         `INSERT INTO users (id, clerk_id, tenant_id, email, name, role, department, avatar_url, is_active, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
          ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, role = EXCLUDED.role, email = EXCLUDED.email;`,
-        [u.id, u.clerkId || null, u.tenantId, u.email, u.name, u.role, u.department || null, u.avatarUrl || null, u.isActive ?? true]
+        [u.id, u.clerkId || null, u.tenantId || defaultTenantId, u.email, u.name, u.role, u.department || null, u.avatarUrl || null, u.isActive ?? true]
       );
       inserted++;
     }
@@ -330,7 +331,7 @@ export async function seedNeonFromStore(storeSnapshot: {
           risk_level = EXCLUDED.risk_level;`,
         [
           s.id,
-          s.tenantId || 'tenant_alpha',
+          s.tenantId || defaultTenantId,
           s.legalName,
           s.tradeName || null,
           s.siret || null,
@@ -341,14 +342,14 @@ export async function seedNeonFromStore(storeSnapshot: {
           s.contactName,
           s.contactEmail,
           s.contactPhone || null,
-          s.tier || 1,
+          typeof s.tier === 'number' ? s.tier : (parseInt(String(s.tier || '1').replace(/\D/g, '')) || 1),
           s.spendCriticality || 'HIGH',
           JSON.stringify(s.productCategories || []),
           s.erpBlockStatus || 'ALLOWED',
           s.erpBlockReason || null,
           s.derogationJustification || null,
-          s.derogationDays || null,
-          s.multiFactorRisk || 20,
+          typeof s.derogationDays === 'number' ? s.derogationDays : null,
+          typeof s.multiFactorRisk === 'number' ? s.multiFactorRisk : (s.multiFactorRisk?.overallScore ?? 20),
           s.riskLevel || 'LOW',
           s.eudrComplianceStatus || 'PENDING_GEO',
         ]
@@ -374,10 +375,10 @@ export async function seedNeonFromStore(storeSnapshot: {
           integrity_score = EXCLUDED.integrity_score;`,
         [
           c.id,
-          c.tenantId || 'tenant_alpha',
+          c.tenantId || defaultTenantId,
           c.supplierId,
-          c.standard,
-          c.standardLabel,
+          c.certificationStandard || c.standard || 'GOTS',
+          c.standardLabel || c.certificationStandard || 'Certification Standard',
           c.certificateNumber,
           c.licenseNumber || null,
           c.certificationBody,
@@ -385,9 +386,9 @@ export async function seedNeonFromStore(storeSnapshot: {
           c.expiryDate,
           c.auditDate || null,
           c.status || 'VALID',
-          c.integrityScore || 95,
-          JSON.stringify(c.scopeCategories || []),
-          JSON.stringify(c.certifiedSites || []),
+          c.confidenceScore ?? c.integrityScore ?? 95,
+          JSON.stringify(c.scope?.productCategories || c.scopeCategories || []),
+          JSON.stringify(c.scope?.coveredFacilities || c.certifiedSites || []),
           c.pdfStorageUrl || `https://storage.googleapis.com/certiwatch-vault/${c.id}.pdf`,
           JSON.stringify(c.ocrExtractedData || {}),
         ]
@@ -405,15 +406,15 @@ export async function seedNeonFromStore(storeSnapshot: {
         ON CONFLICT (id) DO NOTHING;`,
         [
           a.id,
-          a.tenantId || 'tenant_alpha',
-          a.action,
-          a.category,
-          a.description,
-          a.performedBy,
-          a.userRole,
-          a.hash,
-          a.previousHash,
-          a.blockHeight,
+          a.tenantId || defaultTenantId,
+          a.actionCategory || a.action || 'SYSTEM_EVENT',
+          a.entityType || a.category || 'SYSTEM',
+          a.details || a.description || 'Audit log event',
+          a.userName || a.performedBy || 'System',
+          a.userRole || 'ADMIN',
+          a.hash || 'hash_placeholder',
+          a.previousHash || '0',
+          a.blockNumber || a.blockHeight || 1,
           JSON.stringify(a.metadata || {}),
         ]
       );
@@ -430,7 +431,7 @@ export async function seedNeonFromStore(storeSnapshot: {
         ON CONFLICT (id) DO UPDATE SET active = EXCLUDED.active;`,
         [
           m.id,
-          m.tenantId || 'tenant_alpha',
+          m.tenantId || defaultTenantId,
           m.productCategory,
           m.targetCountry || null,
           JSON.stringify(m.requiredStandards || []),
@@ -454,16 +455,16 @@ export async function seedNeonFromStore(storeSnapshot: {
         ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status;`,
         [
           e.id,
-          e.tenantId || 'tenant_alpha',
+          e.tenantId || defaultTenantId,
           e.supplierId,
-          e.countryOfProduction,
-          e.commodity,
-          e.ddsReference,
+          e.countryOfProduction || 'France',
+          e.commodity || 'COCOA',
+          e.tracesNtDdsReference || e.ddsReference || e.plotReference || 'DDS-2026-EUDR-001',
           e.landPlotsCount || 1,
-          e.totalAreaHectares || 10,
-          e.tracesReference || null,
+          e.totalAreaHectares || 12.5,
+          e.tracesReference || e.tracesNtDdsReference || null,
           e.deforestationFreeCutoffDate || '2020-12-31',
-          JSON.stringify(e.polygonCoordinatesWgs84 || []),
+          JSON.stringify(e.polygonCoordinatesWgs84 || (e.gpsPolygonOrPoint ? [{ point: e.gpsPolygonOrPoint }] : [])),
           e.status || 'VERIFIED_SAT',
         ]
       );
@@ -479,12 +480,12 @@ export async function seedNeonFromStore(storeSnapshot: {
         ON CONFLICT (id) DO UPDATE SET active = EXCLUDED.active;`,
         [
           w.id,
-          w.tenantId || 'tenant_alpha',
+          w.tenantId || defaultTenantId,
           w.name,
-          w.targetUrl,
-          w.secretKey,
+          w.url || w.targetUrl || 'https://api.erp.internal/webhooks',
+          w.secret || w.secretKey || 'whsec_secret_default',
           JSON.stringify(w.events || []),
-          w.active ?? true,
+          w.status === 'ACTIVE' || w.active === true,
           w.failureCount || 0,
         ]
       );

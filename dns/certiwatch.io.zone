@@ -1,0 +1,46 @@
+$ORIGIN certiwatch.io.
+$TTL 300
+
+; ====================================================================
+; BIND Zone File for certiwatch.io
+; RFC 1035 Standard DNS Zone - Authoritative Configuration
+; ====================================================================
+
+@       IN      SOA     ns-cloud-c1.googledomains.com. cloud-dns-admin.google.com. (
+                        2026100401      ; Serial (YYYYMMDDNN)
+                        21600           ; Refresh (6 hours)
+                        3600            ; Retry (1 hour)
+                        1209600         ; Expire (2 weeks)
+                        300             ; Minimum TTL (5 minutes)
+                        )
+
+; Authoritative Nameservers
+@       IN      NS      ns-cloud-c1.googledomains.com.
+@       IN      NS      ns-cloud-c2.googledomains.com.
+@       IN      NS      ns-cloud-c3.googledomains.com.
+@       IN      NS      ns-cloud-c4.googledomains.com.
+
+; Apex Anycast IPv4 & IPv6 Records
+@       IN      A       216.239.32.21
+@       IN      A       216.239.34.21
+@       IN      AAAA    2001:4860:4802:32::15
+
+; CNAME Records for Microservices & Cloud Storage
+app     IN      CNAME   ghs.googlehosted.com.
+api     IN      CNAME   ghs.googlehosted.com.
+vault   IN      CNAME   cname.storage.googleapis.com.
+cname   IN      CNAME   ghs.googlehosted.com.
+
+; Certificate Authority Authorization (CAA)
+@       IN      CAA     0 issue "pki.goog"
+@       IN      CAA     0 issue "letsencrypt.org"
+@       IN      CAA     0 iodef "mailto:security@certiwatch.io"
+
+; Sender Policy Framework (SPF)
+@       IN      TXT     "v=spf1 include:_spf.google.com include:_spf.certiwatch.io ~all"
+
+; DomainKeys Identified Mail (DKIM) - Ed25519
+cw2026._domainkey IN TXT "v=DKIM1; k=ed25519; p=MCowBQYDK2VwAyEA4t9Q2mYp0Zk7h1+xXv6NqLm8T5rP2sW3jU1yZb8="
+
+; Domain-based Message Authentication, Reporting and Conformance (DMARC)
+_dmarc  IN      TXT     "v=DMARC1; p=reject; rua=mailto:dmarc-reports@certiwatch.io; pct=100; sp=reject; adkim=s; aspf=s"
