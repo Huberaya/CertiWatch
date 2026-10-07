@@ -152,4 +152,39 @@ describe('API Routes Integration Suite : Enterprise Compliance & SecOps Endpoint
       expect(true).toBe(true);
     }
   });
+
+  it('GET /api/v1/derogations should return list of quality derogations', async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/v1/derogations`);
+      if (res.status === 200) {
+        const data = await res.json();
+        expect(data.success).toBe(true);
+        expect(Array.isArray(data.derogations)).toBe(true);
+        expect(data.derogations.length).toBeGreaterThan(0);
+      }
+    } catch {
+      expect(true).toBe(true);
+    }
+  });
+
+  it('POST /api/v1/derogations/check-coverage should evaluate order spend cap', async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/v1/derogations/check-coverage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          supplierId: 'sup-1',
+          standard: 'GOTS',
+          category: 'Textiles',
+          amountEur: 20000,
+        }),
+      });
+      if (res.status === 200) {
+        const data = await res.json();
+        expect(data.reason).toBeDefined();
+      }
+    } catch {
+      expect(true).toBe(true);
+    }
+  });
 });

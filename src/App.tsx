@@ -22,6 +22,7 @@ import { BillingView } from './components/views/BillingView';
 import { SettingsView } from './components/views/SettingsView';
 import { DeveloperPortalView } from './components/devportal/DeveloperPortalView';
 import { ObservabilityApmPanel } from './components/observability/ObservabilityApmPanel';
+import { DerogationsView } from './components/derogations/DerogationsView';
 import { OfflineIndicator } from './components/pwa/OfflineIndicator';
 
 export default function App() {
@@ -56,6 +57,7 @@ export default function App() {
     alerts: 'Centre de Traitement des Alertes',
     connectors: 'Connecteurs & Registres Officiels',
     matrix: 'Matrice de Conformité Achats',
+    derogations: 'Moteur de Dérogations Qualité & Workflows eIDAS',
     integrations: 'Intégrations ERP & Blocage Commandes',
     audit: 'Journal d’Audit Trail',
     reports: 'Rapports Réglementaires CSRD, Conformité EUDR & Packs d’Audit',
@@ -144,6 +146,8 @@ export default function App() {
             {activeTab === 'matrix' && (
               <MatrixView rules={matrixRules} />
             )}
+
+            {activeTab === 'derogations' && <DerogationsView />}
 
             {activeTab === 'integrations' && (
               <IntegrationsView suppliers={suppliers} certificates={certificates} />
